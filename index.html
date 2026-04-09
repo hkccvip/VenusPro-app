@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Balance Pro - FOH & RP</title>
-    <!-- 基礎庫：React, Tailwind, Lucide -->
+    <title>Balance Pro - 全模型解鎖版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -33,15 +32,42 @@
             const [errorMessage, setErrorMessage] = useState("");
             const [isDemoMode, setIsDemoMode] = useState(false);
             
-            // 安全儲存 Key
-            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v7_key') || "");
+            // 儲存狀態
+            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v8_key') || "");
+            const [modelName, setModelName] = useState(localStorage.getItem('foh_v8_model') || "gemini-1.5-flash");
             const fileInputRef = useRef(null);
 
-            // 確保每一步切換都能載入圖示
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
-                localStorage.setItem('foh_v7_key', userKey);
-            }, [activeTab, aiResult, userKey, errorMessage]);
+                localStorage.setItem('foh_v8_key', userKey);
+                localStorage.setItem('foh_v8_model', modelName);
+            }, [activeTab, aiResult, userKey, modelName, errorMessage]);
+
+            // --- API 診斷功能 ---
+            const checkApiHealth = async () => {
+                if (!userKey) {
+                    alert("請先輸入 API Key！");
+                    return;
+                }
+                setIsProcessing(true);
+                try {
+                    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${userKey}`);
+                    const data = await resp.json();
+                    if (resp.ok) {
+                        const visionModels = data.models
+                            .filter(m => m.name.includes('vision') || m.name.includes('1.5'))
+                            .map(m => m.name.replace('models/', ''))
+                            .join('\n- ');
+                        alert(`診斷成功！您的金鑰支援以下視覺模型：\n\n- ${visionModels}\n\n請在設定中選擇其中一個。`);
+                    } else {
+                        alert(`診斷失敗：\n${data.error?.message}`);
+                    }
+                } catch (err) {
+                    alert(`連線錯誤，請確保 VPN 已開啟：\n${err.message}`);
+                } finally {
+                    setIsProcessing(false);
+                }
+            };
 
             const runDemo = () => {
                 setIsProcessing(true);
@@ -67,6 +93,11 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
+                if (!userKey) {
+                    setErrorMessage("請先進入右上角設定 API 金鑰。");
+                    return;
+                }
+
                 setIsProcessing(true);
                 setErrorMessage("");
                 
@@ -75,8 +106,7 @@
                     const base64Data = reader.result.split(',')[1];
                     const prompt = `分析照片，回傳 JSON：{"event_name":"活動","vip_pillar":"嘉賓","audience_pillar":"觀眾","rp_pillar":[{"task":"物資","detail":"擺位"}],"tech_blocks":"席號"}`;
                     
-                    // 使用最保險的 v1beta 搭配 flash 路徑
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${userKey}`;
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${userKey}`;
 
                     try {
                         const response = await fetch(url, {
@@ -86,7 +116,9 @@
                         });
 
                         const data = await response.json();
-                        if (!response.ok) throw new Error(data.error?.message || "連線失敗");
+                        if (!response.ok) {
+                            throw new Error(`[${modelName}] 拒絕存取: ${data.error?.message || "未知的權限錯誤"}`);
+                        }
 
                         const cleanText = data.candidates[0].content.parts[0].text.replace(/```json/g, "").replace(/```/g, "").trim();
                         setAiResult(JSON.parse(cleanText));
@@ -102,10 +134,10 @@
 
             return (
                 <div className="flex flex-col h-full overflow-hidden select-none">
-                    {/* 頂欄 */}
+                    {/* 頂欄 - 加入版本號方便確認是否有更新成功 */}
                     <header className="px-6 pt-12 pb-5 border-b border-white/5 bg-black/60 backdrop-blur-xl flex justify-between items-center">
                         <div>
-                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none">BALANCE PRO</h1>
+                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none">BALANCE PRO <span className="text-xs text-gray-500">v8.0</span></h1>
                         </div>
                         <button onClick={() => setActiveTab('settings')} className="p-3 bg-white/5 rounded-2xl text-gray-400 active-scale border border-white/10">
                             <i data-lucide="settings" className="w-6 h-6"></i>
@@ -131,11 +163,15 @@
 
                                 {errorMessage && (
                                     <div className="bg-rose-500/10 border border-rose-500/30 p-6 rounded-[32px] space-y-3 shadow-xl">
-                                        <h4 className="text-rose-500 font-black flex items-center italic"><i data-lucide="alert-circle" className="mr-2"></i> 連線報錯 (404/Invalid)</h4>
+                                        <h4 className="text-rose-500 font-black flex items-center italic text-lg"><i data-lucide="alert-circle" className="mr-2"></i> 模型無權限 (404)</h4>
                                         <p className="text-sm text-rose-100 font-bold leading-relaxed">{errorMessage}</p>
+                                        <div className="bg-black/50 p-3 rounded-xl">
+                                            <p className="text-xs text-rose-300 font-bold mb-1">解決方案：</p>
+                                            <p className="text-xs text-gray-400">請進入設定，將模型切換為 <b>gemini-pro-vision</b> 或 <b>gemini-1.5-pro</b>。</p>
+                                        </div>
                                         <div className="flex space-x-2 pt-2">
-                                            <button onClick={() => setActiveTab('settings')} className="flex-1 bg-rose-600 py-3 rounded-xl font-black text-xs uppercase">修正金鑰</button>
-                                            <button onClick={() => setIsDemoMode(true)} className="flex-1 bg-white/10 py-3 rounded-xl font-black text-xs uppercase">演示模式</button>
+                                            <button onClick={() => setActiveTab('settings')} className="flex-1 bg-rose-600 py-3 rounded-xl font-black text-xs uppercase">前往設定</button>
+                                            <button onClick={() => setIsDemoMode(true)} className="flex-1 bg-white/10 py-3 rounded-xl font-black text-xs uppercase">切換演示</button>
                                         </div>
                                     </div>
                                 )}
@@ -144,35 +180,55 @@
                                     <h4 className="font-black text-indigo-400 text-xl flex items-center mb-2 italic"><i data-lucide="camera" className="mr-2"></i>智聯掃描</h4>
                                     <p className="text-lg text-gray-400 leading-relaxed font-bold italic">拍攝或匯入 Requirement，AI 將同步嘉賓、觀眾與 RP 空間任務。</p>
                                 </div>
-
-                                {/* 防止快取按鈕 */}
-                                <button onClick={() => window.location.reload(true)} className="w-full py-4 text-[10px] font-black text-gray-700 uppercase tracking-widest">
-                                    如有異常，點此強制重整程式
-                                </button>
                             </div>
                         )}
 
                         {activeTab === 'settings' && (
-                            <div className="space-y-8 animate-in slide-in-from-right-10">
-                                <h2 className="text-3xl font-black text-white italic">安全性設定</h2>
+                            <div className="space-y-8 animate-in slide-in-from-right-10 pb-10">
+                                <h2 className="text-3xl font-black text-white italic">系統設定</h2>
                                 <div className="space-y-6">
+                                    
                                     <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Google API Key</label>
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">1. 輸入金鑰</label>
                                         <input 
                                             type="password"
                                             placeholder="AIzaSy..." 
-                                            className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white font-mono text-lg"
+                                            className="w-full bg-gray-900 border border-white/10 p-5 rounded-2xl text-white font-mono text-lg"
                                             value={userKey}
                                             onChange={(e) => setUserKey(e.target.value)}
                                         />
+                                        <button onClick={checkApiHealth} className="w-full bg-indigo-500/20 text-indigo-400 font-bold py-3 rounded-xl text-sm border border-indigo-500/30 active-scale">
+                                            測試金鑰並列出可用模型
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">2. 選擇 AI 模型 (解決 404)</label>
+                                        <select 
+                                            className="w-full bg-gray-900 border border-white/10 p-5 rounded-2xl text-white font-bold text-lg outline-none"
+                                            value={modelName}
+                                            onChange={(e) => setModelName(e.target.value)}
+                                        >
+                                            <option value="gemini-1.5-flash">Gemini 1.5 Flash (預設)</option>
+                                            <option value="gemini-pro-vision">Gemini Pro Vision (推薦舊金鑰使用)</option>
+                                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                            <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash 最新版</option>
+                                        </select>
                                     </div>
 
                                     <div className="flex items-center justify-between p-6 bg-amber-500/10 border border-amber-500/20 rounded-3xl">
-                                        <p className="font-black text-amber-500 text-lg uppercase italic tracking-tighter">Demo Mode (模擬)</p>
+                                        <div className="space-y-1">
+                                            <p className="font-black text-amber-500 text-lg uppercase italic tracking-tighter">Demo Mode (模擬)</p>
+                                            <p className="text-[10px] font-bold text-amber-500/60 uppercase">無需金鑰，直接體驗</p>
+                                        </div>
                                         <input type="checkbox" className="w-8 h-8 rounded-lg accent-amber-500" checked={isDemoMode} onChange={() => setIsDemoMode(!isDemoMode)} />
                                     </div>
 
                                     <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-6 rounded-[32px] text-xl shadow-2xl active-scale">儲存並返回</button>
+                                    
+                                    <button onClick={() => window.location.reload(true)} className="w-full py-4 text-[10px] font-black text-gray-700 uppercase tracking-widest">
+                                        強制重新載入程式
+                                    </button>
                                 </div>
                             </div>
                         )}
@@ -224,7 +280,7 @@
                         <div className="fixed inset-0 bg-black/98 z-[100] flex flex-col items-center justify-center p-12 text-center">
                             <div className="animate-spin-custom mb-10 text-indigo-500"><i data-lucide="refresh-cw" className="w-20 h-20"></i></div>
                             <h3 className="text-4xl font-black italic tracking-widest text-white uppercase tracking-tighter">Syncing</h3>
-                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">{isDemoMode ? '演示同步中...' : '同步 AI 數據中... (請確保 VPN)'}</p>
+                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">{isDemoMode ? '演示同步中...' : `正在使用 [${modelName}] 解析...`}</p>
                         </div>
                     )}
                 </div>
@@ -236,5 +292,6 @@
     </script>
 </body>
 </html>
+
 
 ```
