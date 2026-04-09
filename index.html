@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Balance Pro - v11 雙核版</title>
+    <title>Balance Pro - v16 圖文智聯版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -14,294 +14,374 @@
         body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; font-family: system-ui, sans-serif; margin: 0; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
         .active-scale:active { transform: scale(0.94); transition: 0.1s; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .animate-spin-custom { animation: spin 1s linear infinite; }
         html, body, #root { height: 100%; overflow: hidden; }
-        /* 隱藏捲軸但可滾動 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        .animate-pop:active { animation: pop 0.2s ease-out; }
+        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useRef, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
+
+        const VENUES_DATA = {
+            "演奏廳 (音樂廳)": {
+                capacity: "座位總數：1957", details: "堂座(1): 481 | 堂座(2): 563 | 樓座: 629 | 合唱席: 284",
+                tags: { vip: ["大堂 2R4C 接待處", "需專人引導至堂座", "合唱席 VIP 預留", "會後合照安排", "媒體登記處"], audience: ["嚴禁攝影及錄音", "遲到者樂章間進場", "派發場刊", "樓座指引"], rp: ["Foyer 放置 A3 指示牌", "拉起紅繩圍封", "準備檢票機 Scanner", "清場廣播"], tech: ["控制台 Console 預留", "輪椅區 Wheelchair", "3個合唱席", "5個合唱席", "堂座觀眾席控制台"] }
+            },
+            "大劇院": {
+                capacity: "座位總數：1708", details: "堂座(1): 297 | 堂座(2): 491 | 樓座: 425 | 高席: 495",
+                tags: { vip: ["大堂 2R4C 接待處", "高席 VIP 預留", "需專人引導入座", "酒會區預備"], audience: ["嚴禁攝影及錄音", "遲到者第一幕後進場", "6歲以下恕不招待", "高席電梯指引"], rp: ["Podium 放置指示牌", "拉起紅繩圍封", "準備檢票機 Scanner", "對講機 Channel 2"], tech: ["CA 5-17 排", "BQ 13-15 排", "控制台 Console", "樂池 (Orchestra Pit) 封閉"] }
+            },
+            "小劇場 (劇場)": {
+                capacity: "彈性座位配置", details: "單向: 321 | 雙向: 382 | 叁向: 303 | 四向: 496",
+                tags: { vip: ["入口接待處", "前排 VIP 預留", "演出後交流會"], audience: ["自由入座", "嚴禁攝影", "開演後嚴禁進場"], rp: ["門外放置 A3 指示牌", "排隊動線指引", "準備檢票機"], tech: ["燈光/音響控制台", "舞台邊界圍封", "單向配置", "四向配置"] }
+            },
+            "大堂 (Foyer)": {
+                capacity: "開放式空間", details: "無固定座位，適合典禮 / 記者招待會 / 酒會",
+                tags: { vip: ["主禮嘉賓接待處", "剪綵區預留", "酒水區", "媒體拍攝區"], audience: ["自由參觀", "人群管制", "排隊動線指引"], rp: ["放置多個 A3 指示牌", "紅繩圍封 VIP 區", "背景板佈置", "PA 系統測試"], tech: ["流動電源", "臨時燈光佈置"] }
+            },
+            "小型展覽 E1": { capacity: "展覽空間 E1", details: "小型展覽 / 工作坊", tags: { vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
+            "小型展覽 E2": { capacity: "展覽空間 E2", details: "小型展覽 / 工作坊", tags: { vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
+            "小型展覽 E3": { capacity: "展覽空間 E3", details: "小型展覽 / 工作坊", tags: { vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
+            "小型展覽 E4": { capacity: "展覽空間 E4", details: "小型展覽 / 工作坊", tags: { vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } }
+        };
+
+        const VENUE_NAMES = Object.keys(VENUES_DATA);
+        const getTodayDate = () => new Date().toISOString().split('T')[0];
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
-            const [isProcessing, setIsProcessing] = useState(false);
-            const [aiResult, setAiResult] = useState(null);
-            const [errorMessage, setErrorMessage] = useState("");
-            
-            // 儲存狀態
-            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v11_key') || "");
-            const [selectedModel, setSelectedModel] = useState(localStorage.getItem('foh_v11_model') || "gemini-1.5-flash-latest");
-            
-            // 手動輸入的狀態
-            const [manualForm, setManualForm] = useState({
-                event_name: "", vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: ""
-            });
-
+            const [reportData, setReportData] = useState(null);
+            const [lightboxImage, setLightboxImage] = useState(null); // 全螢幕圖片預覽
             const fileInputRef = useRef(null);
+            
+            // 本地歷史紀錄 (共用 v14 的 key 以保留您的舊資料)
+            const [records, setRecords] = useState(() => {
+                const saved = localStorage.getItem('balance_pro_records_v14');
+                return saved ? JSON.parse(saved) : [];
+            });
+            
+            // 表單狀態
+            const [form, setForm] = useState({
+                date: getTodayDate(), venue: VENUE_NAMES[0], event_name: "", 
+                vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: "",
+                reference_image: null // 儲存壓縮後的圖片 base64
+            });
 
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
-                localStorage.setItem('foh_v11_key', userKey);
-                localStorage.setItem('foh_v11_model', selectedModel);
-            }, [activeTab, aiResult, userKey, selectedModel, errorMessage]);
-
-            // --- 處理 AI 圖片解析 ---
-            const handleFileSelect = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                if (!userKey) {
-                    setErrorMessage("未設定 API Key。您可以選擇使用「手動建檔」模式。");
-                    return;
+                try {
+                    localStorage.setItem('balance_pro_records_v14', JSON.stringify(records));
+                } catch (e) {
+                    alert("⚠️ 手機儲存空間已滿！請前往「過往紀錄」刪除一些帶有圖片的舊紀錄。");
                 }
+            }, [activeTab, reportData, records, form.venue, lightboxImage]);
 
-                setIsProcessing(true);
-                setErrorMessage("");
-                
-                const reader = new FileReader();
-                reader.onloadend = async () => {
-                    const base64Data = reader.result.split(',')[1];
-                    const prompt = `分析照片，回傳 JSON：{"event_name":"活動","vip_pillar":"嘉賓","audience_pillar":"觀眾","rp_pillar":[{"task":"物資","detail":"擺位"}],"tech_blocks":"席號"}`;
-                    
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${userKey}`;
+            // --- 圖片壓縮引擎 (防止 LocalStorage 爆滿) ---
+            const compressImage = (file) => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.src = e.target.result;
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const MAX_WIDTH = 1024; // 限制最大寬度
+                            const MAX_HEIGHT = 1024;
+                            let width = img.width;
+                            let height = img.height;
 
-                    try {
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/png", data: base64Data } }] }] })
-                        });
-
-                        const data = await response.json();
-                        if (!response.ok) {
-                            throw new Error(`Google 拒絕連線：${data.error?.message || "專案無權限"}`);
-                        }
-
-                        const cleanText = data.candidates[0].content.parts[0].text.replace(/```json/g, "").replace(/```/g, "").trim();
-                        setAiResult(JSON.parse(cleanText));
-                        setActiveTab('report');
-                    } catch (err) {
-                        setErrorMessage(err.message);
-                    } finally {
-                        setIsProcessing(false);
-                    }
-                };
-                reader.readAsDataURL(file);
+                            if (width > height) {
+                                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                            } else {
+                                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                            }
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0, width, height);
+                            // 壓縮成 JPG 格式，品質 0.6，極大減少體積
+                            resolve(canvas.toDataURL('image/jpeg', 0.6));
+                        };
+                    };
+                });
             };
 
-            // --- 處理手動建檔 ---
-            const handleManualSubmit = () => {
-                if (!manualForm.event_name) {
-                    alert("請至少輸入活動名稱！");
-                    return;
-                }
-                
-                // 將使用者輸入的多行文字，轉換為 RP 任務陣列
-                const rpArray = manualForm.rp_tasks.split('\n').filter(t => t.trim() !== '').map((task, index) => {
-                    return { task: `任務 ${index + 1}`, detail: task.trim() };
-                });
+            const handleImageUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const compressedBase64 = await compressImage(file);
+                setForm(prev => ({ ...prev, reference_image: compressedBase64 }));
+            };
 
-                const formattedResult = {
-                    event_name: manualForm.event_name,
-                    vip_pillar: manualForm.vip_pillar || "無特別指示",
-                    audience_pillar: manualForm.audience_pillar || "無特別指示",
-                    rp_pillar: rpArray.length > 0 ? rpArray : [{task: "常規巡查", detail: "保持前台與大堂整潔"}],
-                    tech_blocks: manualForm.tech_blocks || "無"
+            const removeImage = () => {
+                setForm(prev => ({ ...prev, reference_image: null }));
+                if (fileInputRef.current) fileInputRef.current.value = "";
+            };
+
+            const appendTag = (field, text) => {
+                setForm(prev => {
+                    const current = prev[field];
+                    if (current.includes(text)) return prev;
+                    if (field === 'tech_blocks') return { ...prev, [field]: current ? `${current}, ${text}` : text };
+                    return { ...prev, [field]: current ? `${current}\n- ${text}` : `- ${text}` };
+                });
+            };
+
+            const resetForm = () => {
+                setForm({ date: getTodayDate(), venue: VENUE_NAMES[0], event_name: "", vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: "", reference_image: null });
+                if (fileInputRef.current) fileInputRef.current.value = "";
+            };
+
+            const generateAndSaveReport = () => {
+                if (!form.event_name.trim()) { alert("請輸入「節目/活動名稱」！"); return; }
+                const rpArray = form.rp_tasks.split('\n').map(t => t.replace(/^- /, '').trim()).filter(t => t !== '').map((task, index) => ({ task: `任務 ${index + 1}`, detail: task }));
+
+                const newReport = {
+                    id: Date.now().toString(),
+                    timestamp: new Date().getTime(),
+                    date: form.date, venue: form.venue, event_name: form.event_name,
+                    vip_pillar: form.vip_pillar || "無特別指示",
+                    audience_pillar: form.audience_pillar || "常規運作",
+                    rp_pillar: rpArray.length > 0 ? rpArray : [{task: "常規巡查", detail: "保持前台與大堂整潔及動線順暢"}],
+                    tech_blocks: form.tech_blocks || "無",
+                    reference_image: form.reference_image // 儲存壓縮圖
                 };
 
-                setAiResult(formattedResult);
+                setRecords(prev => [newReport, ...prev]);
+                setReportData(newReport);
                 setActiveTab('report');
             };
 
+            const viewRecord = (record) => { setReportData(record); setActiveTab('report'); };
+
+            const deleteRecord = (id, e) => {
+                e.stopPropagation();
+                if(confirm("確定要刪除這筆紀錄嗎？(包含附加圖表將一併刪除)")) {
+                    setRecords(prev => prev.filter(r => r.id !== id));
+                    if (reportData && reportData.id === id) { setReportData(null); setActiveTab('history'); }
+                }
+            };
+
             return (
-                <div className="flex flex-col h-full overflow-hidden select-none">
-                    <header className="px-6 pt-12 pb-5 border-b border-white/5 bg-black/60 backdrop-blur-xl flex justify-between items-center">
-                        <div>
-                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none">BALANCE PRO <span className="text-xs text-gray-500">v11</span></h1>
-                            <p className="text-[10px] font-bold text-gray-500 uppercase mt-1">雙核驅動：AI & 手動模式</p>
+                <div className="flex flex-col h-full overflow-hidden select-none bg-[#050505]">
+                    
+                    {/* --- 全螢幕圖片檢視器 (Lightbox) --- */}
+                    {lightboxImage && (
+                        <div className="fixed inset-0 bg-black/95 z-[200] flex flex-col items-center justify-center animate-in fade-in duration-200" onClick={() => setLightboxImage(null)}>
+                            <button className="absolute top-10 right-6 p-4 bg-white/10 rounded-full active-scale" onClick={() => setLightboxImage(null)}>
+                                <i data-lucide="x" className="w-8 h-8 text-white"></i>
+                            </button>
+                            <img src={lightboxImage} className="max-w-full max-h-[85vh] object-contain p-4" alt="Reference" />
+                            <p className="text-gray-500 text-sm absolute bottom-10"><i data-lucide="zoom-in" className="inline w-4 h-4 mr-1 mb-0.5"></i>雙指可放大查看</p>
                         </div>
-                        <button onClick={() => setActiveTab('settings')} className={`p-3 rounded-2xl active-scale border ${activeTab === 'settings' ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50' : 'bg-white/5 text-gray-400 border-white/10'}`}>
-                            <i data-lucide="settings" className="w-6 h-6"></i>
-                        </button>
+                    )}
+
+                    <header className="px-6 pt-12 pb-5 border-b border-white/5 bg-black/80 backdrop-blur-2xl flex justify-between items-center z-50">
+                        <div>
+                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none flex items-center">
+                                BALANCE PRO <span className="text-[10px] text-gray-500 ml-2 mt-1 not-italic tracking-widest">v16</span>
+                            </h1>
+                            <p className="text-[10px] font-bold text-emerald-500 uppercase mt-1.5 tracking-widest flex items-center">
+                                <i data-lucide="image" className="w-3 h-3 mr-1"></i> 圖文智聯引擎
+                            </p>
+                        </div>
                     </header>
 
-                    <main className="flex-1 overflow-y-auto p-6 pb-40 no-scrollbar">
+                    <main className="flex-1 overflow-y-auto p-6 pb-40 no-scrollbar relative">
                         
-                        {/* --- 總覽面板 --- */}
+                        {/* ================= 總覽面板 ================= */}
                         {activeTab === 'dashboard' && (
-                            <div className="space-y-8 animate-in fade-in">
-                                <h2 className="text-4xl font-black text-white leading-tight">運營平衡</h2>
-                                
+                            <div className="space-y-8 animate-in fade-in duration-300">
+                                <div className="flex justify-between items-end">
+                                    <h2 className="text-4xl font-black text-white leading-tight">運營總覽</h2>
+                                </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-gray-900/50 border border-amber-500/10 p-6 rounded-[32px] shadow-lg">
-                                        <p className="text-amber-500 text-[10px] font-bold uppercase tracking-widest mb-1">嘉賓抵達</p>
-                                        <p className="text-4xl font-black text-white italic">04</p>
+                                        <p className="text-amber-500 text-[10px] font-bold uppercase tracking-widest mb-1">已存紀錄</p>
+                                        <p className="text-4xl font-black text-white italic">{records.length}</p>
                                     </div>
-                                    <div className="bg-gray-900/50 border border-indigo-500/10 p-6 rounded-[32px] shadow-lg">
-                                        <p className="text-indigo-500 text-[10px] font-bold uppercase tracking-widest mb-1">觀眾進場</p>
-                                        <p className="text-4xl font-black text-white italic">128</p>
+                                    <div className="bg-gray-900/50 border border-indigo-500/10 p-6 rounded-[32px] shadow-lg active-scale" onClick={() => setActiveTab('history')}>
+                                        <p className="text-indigo-500 text-[10px] font-bold uppercase tracking-widest mb-1">過往紀錄</p>
+                                        <div className="flex items-center mt-2">
+                                            <i data-lucide="folder-open" className="w-8 h-8 text-white mr-2"></i>
+                                            <i data-lucide="arrow-right" className="w-4 h-4 text-indigo-400"></i>
+                                        </div>
                                     </div>
                                 </div>
+                                <div className="mt-8">
+                                    <button onClick={() => { resetForm(); setActiveTab('builder'); }} className="w-full bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-[40px] active-scale shadow-[0_10px_40px_rgba(79,70,229,0.4)] text-left relative overflow-hidden">
+                                        <div className="relative z-10">
+                                            <h4 className="font-black text-white text-2xl flex items-center mb-2 italic">
+                                                <i data-lucide="zap" className="mr-3 w-8 h-8 text-amber-400"></i> 智選速記建檔
+                                            </h4>
+                                            <p className="text-sm text-indigo-200 font-bold leading-relaxed pr-8">選擇場地，使用快捷標籤，並支援<b>匯入圖表相片</b>。</p>
+                                        </div>
+                                        <i data-lucide="chevron-right" className="absolute right-6 top-1/2 transform -translate-y-1/2 w-8 h-8 text-white/50 z-10"></i>
+                                        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
-                                {errorMessage && (
-                                    <div className="bg-rose-500/10 border border-rose-500/30 p-6 rounded-[32px] space-y-3 shadow-xl">
-                                        <h4 className="text-rose-500 font-black flex items-center italic text-lg"><i data-lucide="alert-circle" className="mr-2"></i> 分析失敗 (專案封鎖)</h4>
-                                        <p className="text-xs text-rose-100 font-bold leading-relaxed">{errorMessage}</p>
-                                        <p className="text-xs text-rose-300 font-bold">💡 建議：Google 已封鎖您的 API Key。請直接使用下方的「手動建檔」，依然能產出完美的報告！</p>
+                        {/* ================= 歷史紀錄 ================= */}
+                        {activeTab === 'history' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-10">
+                                <h2 className="text-3xl font-black text-white italic flex items-center"><i data-lucide="history" className="mr-3 w-8 h-8 text-indigo-500"></i>過往紀錄</h2>
+                                {records.length === 0 ? (
+                                    <div className="text-center py-20 text-gray-500">
+                                        <i data-lucide="inbox" className="w-16 h-16 mx-auto mb-4 opacity-50"></i><p className="font-bold">目前沒有任何紀錄</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4 pb-20">
+                                        {records.map(record => (
+                                            <div key={record.id} onClick={() => viewRecord(record)} className="bg-gray-900 border border-white/10 p-5 rounded-[28px] active-scale flex items-center justify-between shadow-lg">
+                                                <div className="flex-1 pr-4">
+                                                    <div className="flex items-center space-x-2 mb-2">
+                                                        <span className="bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest">{record.date}</span>
+                                                        <span className="bg-white/10 text-gray-300 px-2 py-0.5 rounded-md text-[10px] font-bold truncate max-w-[100px]">{record.venue}</span>
+                                                        {record.reference_image && <i data-lucide="image" className="w-3 h-3 text-emerald-400"></i>}
+                                                    </div>
+                                                    <h3 className="font-black text-white text-lg truncate tracking-tight">{record.event_name}</h3>
+                                                </div>
+                                                <button onClick={(e) => deleteRecord(record.id, e)} className="p-3 bg-rose-500/10 rounded-xl text-rose-500 active-scale"><i data-lucide="trash-2" className="w-5 h-5"></i></button>
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
+                            </div>
+                        )}
 
-                                <div className="grid gap-4">
-                                    <div className="bg-indigo-600/10 border border-indigo-500/30 p-6 rounded-[32px] active-scale shadow-lg flex items-center justify-between" onClick={() => fileInputRef.current.click()}>
-                                        <div>
-                                            <h4 className="font-black text-indigo-400 text-lg flex items-center mb-1"><i data-lucide="camera" className="mr-2 w-5 h-5"></i>AI 拍照分析</h4>
-                                            <p className="text-xs text-indigo-200/70 font-bold">需設定可用之金鑰</p>
+                        {/* ================= 構建器 (新增紀錄) ================= */}
+                        {activeTab === 'builder' && (
+                            <div className="space-y-8 animate-in slide-in-from-right-10">
+                                <h2 className="text-3xl font-black text-white italic">新增節目紀錄</h2>
+
+                                <div className="space-y-8 pb-10">
+                                    <div className="bg-white/5 p-6 rounded-[32px] border border-white/5 space-y-6">
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center"><i data-lucide="calendar" className="mr-2 w-4 h-4 text-indigo-400"></i>節目日期</label>
+                                            <input type="date" className="w-full bg-black border border-white/10 p-4 rounded-2xl text-white font-bold text-lg outline-none" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
                                         </div>
-                                        <i data-lucide="chevron-right" className="text-indigo-400"></i>
-                                    </div>
 
-                                    <div className="bg-emerald-600/10 border border-emerald-500/30 p-6 rounded-[32px] active-scale shadow-lg flex items-center justify-between" onClick={() => setActiveTab('manual')}>
-                                        <div>
-                                            <h4 className="font-black text-emerald-400 text-lg flex items-center mb-1"><i data-lucide="pen-tool" className="mr-2 w-5 h-5"></i>手動快速建檔</h4>
-                                            <p className="text-xs text-emerald-200/70 font-bold">免翻牆、免金鑰、100% 穩定</p>
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center"><i data-lucide="map-pin" className="mr-2 w-4 h-4 text-rose-400"></i>表演場地 (左右滑動選擇)</label>
+                                            <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
+                                                {VENUE_NAMES.map(v => (
+                                                    <button key={v} onClick={() => setForm({...form, venue: v})} className={`whitespace-nowrap px-4 py-3 rounded-2xl text-sm font-black transition-all border shrink-0 ${form.venue === v ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/30' : 'bg-black border-white/10 text-gray-400'}`}>{v}</button>
+                                                ))}
+                                            </div>
+                                            <div className="bg-black/50 p-4 rounded-2xl border border-indigo-500/20 mt-2">
+                                                <p className="text-indigo-400 font-black text-sm mb-1">{VENUES_DATA[form.venue].capacity}</p>
+                                                <p className="text-gray-400 text-xs font-medium leading-relaxed">{VENUES_DATA[form.venue].details}</p>
+                                            </div>
                                         </div>
-                                        <i data-lucide="chevron-right" className="text-emerald-400"></i>
+
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center"><i data-lucide="ticket" className="mr-2 w-4 h-4 text-amber-400"></i>節目/活動名稱 (必填)</label>
+                                            <input type="text" placeholder="輸入節目名稱..." className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white font-black text-xl outline-none focus:border-indigo-500" value={form.event_name} onChange={e => setForm({...form, event_name: e.target.value})} />
+                                        </div>
+                                    </div>
+
+                                    {/* --- 附加圖表功能 --- */}
+                                    <div className="space-y-3 bg-indigo-500/5 p-6 rounded-[32px] border border-indigo-500/20">
+                                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center mb-2"><i data-lucide="image" className="mr-2 w-4 h-4"></i>附加圖表 (Requirement / Floor Plan)</label>
+                                        <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                                        
+                                        {!form.reference_image ? (
+                                            <button onClick={() => fileInputRef.current.click()} className="w-full py-6 border-2 border-dashed border-indigo-500/30 rounded-2xl text-indigo-300 font-bold active-scale flex flex-col items-center justify-center bg-indigo-500/10">
+                                                <i data-lucide="upload-cloud" className="w-8 h-8 mb-2 text-indigo-400"></i>
+                                                <span>拍攝或選擇照片</span>
+                                                <span className="text-xs font-normal text-indigo-400/60 mt-1">方便經理核實與 RP 擺位參考</span>
+                                            </button>
+                                        ) : (
+                                            <div className="relative rounded-2xl overflow-hidden border border-white/20">
+                                                <img src={form.reference_image} alt="Preview" className="w-full max-h-48 object-cover bg-black" />
+                                                <button onClick={removeImage} className="absolute top-2 right-2 bg-black/70 p-2 rounded-full text-rose-400 backdrop-blur-md active-scale border border-white/10">
+                                                    <i data-lucide="trash-2" className="w-5 h-5"></i>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-3"><label className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-4 h-4"></i>嘉賓接待 (VIP)</label><div className="flex flex-wrap gap-2 mb-2">{VENUES_DATA[form.venue].tags.vip.map(tag => (<button key={tag} onClick={() => appendTag('vip_pillar', tag)} className="px-3 py-2 bg-amber-500/10 text-amber-400 text-xs font-bold rounded-xl border border-amber-500/20 active-scale animate-pop">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-gray-900 border border-amber-500/20 p-5 rounded-2xl text-white font-medium outline-none" rows="3" value={form.vip_pillar} onChange={e => setForm({...form, vip_pillar: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-4 h-4"></i>觀眾管理 (Audience)</label><div className="flex flex-wrap gap-2 mb-2">{VENUES_DATA[form.venue].tags.audience.map(tag => (<button key={tag} onClick={() => appendTag('audience_pillar', tag)} className="px-3 py-2 bg-indigo-500/10 text-indigo-300 text-xs font-bold rounded-xl border border-indigo-500/20 active-scale animate-pop">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-gray-900 border border-indigo-500/20 p-5 rounded-2xl text-white font-medium outline-none" rows="3" value={form.audience_pillar} onChange={e => setForm({...form, audience_pillar: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-emerald-500 uppercase tracking-widest flex items-center"><i data-lucide="box" className="mr-2 w-4 h-4"></i>RP 空間任務 (Logistics)</label><div className="flex flex-wrap gap-2 mb-2">{VENUES_DATA[form.venue].tags.rp.map(tag => (<button key={tag} onClick={() => appendTag('rp_tasks', tag)} className="px-3 py-2 bg-emerald-500/10 text-emerald-400 text-xs font-bold rounded-xl border border-emerald-500/20 active-scale animate-pop">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-gray-900 border border-emerald-500/20 p-5 rounded-2xl text-white font-medium outline-none" rows="4" value={form.rp_tasks} onChange={e => setForm({...form, rp_tasks: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center"><i data-lucide="ban" className="mr-2 w-4 h-4"></i>技術封位 (Tech Blocks)</label><div className="flex flex-wrap gap-2 mb-2">{VENUES_DATA[form.venue].tags.tech.map(tag => (<button key={tag} onClick={() => appendTag('tech_blocks', tag)} className="px-3 py-2 bg-rose-500/10 text-rose-400 text-xs font-bold rounded-xl border border-rose-500/20 active-scale animate-pop">+ {tag}</button>))}</div><input type="text" placeholder="..." className="w-full bg-gray-900 border border-rose-500/20 p-5 rounded-2xl text-white font-mono text-lg outline-none" value={form.tech_blocks} onChange={e => setForm({...form, tech_blocks: e.target.value})} /></div>
+
+                                    <div className="pt-6 space-y-4">
+                                        <button onClick={generateAndSaveReport} className="w-full bg-emerald-600 text-white font-black py-6 rounded-[32px] text-xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] active-scale uppercase tracking-widest flex items-center justify-center">
+                                            <i data-lucide="save" className="mr-2 w-6 h-6"></i> 生成並儲存紀錄
+                                        </button>
+                                        <button onClick={() => setActiveTab('dashboard')} className="w-full bg-transparent text-gray-500 font-bold py-4 rounded-[32px] text-sm uppercase active-scale border border-white/5">取消</button>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* --- 手動建檔面板 --- */}
-                        {activeTab === 'manual' && (
-                            <div className="space-y-6 animate-in slide-in-from-right-10">
-                                <h2 className="text-3xl font-black text-white italic">手動建檔</h2>
-                                <p className="text-sm text-gray-400">將紙本資訊快速數位化，排版出專業的 RP 報告。</p>
-
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">活動名稱 (必填)</label>
-                                        <input type="text" placeholder="例如：美狄亞 MEDEA" className="w-full bg-gray-900 border border-white/10 p-4 rounded-2xl text-white font-bold text-lg" 
-                                            value={manualForm.event_name} onChange={e => setManualForm({...manualForm, event_name: e.target.value})} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest">嘉賓接待 VIP (選填)</label>
-                                        <textarea placeholder="接待處位置、特別要求..." className="w-full bg-gray-900 border border-amber-500/20 p-4 rounded-2xl text-white font-medium" rows="2"
-                                            value={manualForm.vip_pillar} onChange={e => setManualForm({...manualForm, vip_pillar: e.target.value})}></textarea>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">觀眾管理 General (選填)</label>
-                                        <textarea placeholder="進場規則、攝影限制..." className="w-full bg-gray-900 border border-indigo-500/20 p-4 rounded-2xl text-white font-medium" rows="2"
-                                            value={manualForm.audience_pillar} onChange={e => setManualForm({...manualForm, audience_pillar: e.target.value})}></textarea>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">RP 物資擺位任務 (一行一個)</label>
-                                        <textarea placeholder="1. 大堂正門放置 2R4C 長檯&#10;2. 入口處放置 A3 指示牌" className="w-full bg-gray-900 border border-emerald-500/20 p-4 rounded-2xl text-white font-medium leading-relaxed" rows="4"
-                                            value={manualForm.rp_tasks} onChange={e => setManualForm({...manualForm, rp_tasks: e.target.value})}></textarea>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest">技術封位 Tech Blocks (選填)</label>
-                                        <input type="text" placeholder="例如：CA5-17" className="w-full bg-gray-900 border border-rose-500/20 p-4 rounded-2xl text-white font-mono" 
-                                            value={manualForm.tech_blocks} onChange={e => setManualForm({...manualForm, tech_blocks: e.target.value})} />
-                                    </div>
-
-                                    <button onClick={handleManualSubmit} className="w-full bg-emerald-600 text-white font-black py-5 rounded-[24px] text-lg shadow-xl active-scale uppercase tracking-tighter">
-                                        生成平衡報告
-                                    </button>
-                                    <button onClick={() => setActiveTab('dashboard')} className="w-full bg-transparent text-gray-500 font-bold py-3 rounded-[24px] text-sm uppercase">
-                                        取消
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* --- 設定面板 --- */}
-                        {activeTab === 'settings' && (
-                            <div className="space-y-8 animate-in slide-in-from-right-10 pb-10">
-                                <h2 className="text-3xl font-black text-white italic">系統設定</h2>
-                                
-                                <div className="bg-white/5 p-6 rounded-[32px] border border-white/10 space-y-5">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Google API Key</label>
-                                        <input type="password" placeholder="AIzaSy..." className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white font-mono text-lg"
-                                            value={userKey} onChange={(e) => setUserKey(e.target.value)} />
-                                    </div>
-                                    <div className="space-y-2 pt-2 border-t border-white/5">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">選擇 AI 模型</label>
-                                        <select className="w-full bg-black border border-indigo-500/50 p-5 rounded-2xl text-indigo-400 font-bold text-base outline-none"
-                                            value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-                                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                                            <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash Latest</option>
-                                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                            <option value="gemini-pro-vision">Gemini Pro Vision</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-6 rounded-[32px] text-xl shadow-2xl active-scale">儲存並返回</button>
-                            </div>
-                        )}
-
-                        {/* --- 報告面板 --- */}
-                        {activeTab === 'report' && aiResult && (
+                        {/* ================= 報告面板 ================= */}
+                        {activeTab === 'report' && reportData && (
                             <div className="space-y-8 animate-in slide-in-from-bottom-10 pb-20 text-white">
-                                <h2 className="text-3xl font-black text-indigo-500 italic border-b-2 border-indigo-500/30 pb-2 uppercase tracking-tighter">{aiResult.event_name}</h2>
-                                <section className="bg-amber-500/5 border border-amber-500/20 p-6 rounded-[40px] space-y-2">
-                                    <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest"><i data-lucide="star" className="inline w-4 h-4 mr-2"></i>VIP 接待</h3>
-                                    <p className="text-xl font-bold leading-relaxed">{aiResult.vip_pillar}</p>
-                                </section>
-                                <section className="bg-indigo-500/5 border border-indigo-500/20 p-6 rounded-[40px] space-y-2">
-                                    <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest"><i data-lucide="users" className="inline w-4 h-4 mr-2"></i>觀眾管理</h3>
-                                    <p className="text-xl font-bold leading-relaxed">{aiResult.audience_pillar}</p>
-                                </section>
-                                <section className="space-y-4">
-                                    <h3 className="text-emerald-500 font-black text-xs uppercase tracking-widest px-2"><i data-lucide="box" className="inline w-4 h-4 mr-2"></i>RP 擺位清單</h3>
-                                    {aiResult.rp_pillar.map((item, i) => (
-                                        <div key={i} className="bg-gray-900/80 border-l-4 border-emerald-500 p-6 rounded-2xl space-y-1">
-                                            <p className="text-2xl font-black tracking-tight text-emerald-400">{item.task}</p>
-                                            <p className="text-lg text-gray-300 font-medium italic leading-snug">{item.detail}</p>
+                                <div className="border-b-4 border-indigo-500/30 pb-4">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center space-x-2">
+                                            <span className="bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-indigo-500/30">{reportData.date}</span>
+                                            <span className="bg-white/10 text-white px-3 py-1 rounded-lg text-xs font-bold">{reportData.venue}</span>
                                         </div>
-                                    ))}
-                                </section>
-                                <section className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[32px] shadow-inner">
-                                    <h3 className="text-rose-500 font-black text-xs uppercase tracking-widest mb-1"><i data-lucide="ban" className="inline w-4 h-4 mr-2"></i>封位席號</h3>
-                                    <p className="text-2xl font-mono text-white font-black italic tracking-tighter">{aiResult.tech_blocks}</p>
-                                </section>
-                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-white/5 border border-white/10 text-gray-500 font-black py-6 rounded-[32px] text-xl uppercase italic active-scale">Close Report</button>
+                                    </div>
+                                    <h2 className="text-4xl font-black text-white italic uppercase tracking-tighter leading-tight mb-2">{reportData.event_name}</h2>
+                                    <p className="text-xs font-mono text-gray-400 bg-gray-900 p-2 rounded-lg border border-white/5 inline-block mb-4">{VENUES_DATA[reportData.venue]?.capacity}</p>
+                                    
+                                    {/* 原圖檢視按鈕 */}
+                                    {reportData.reference_image && (
+                                        <button onClick={() => setLightboxImage(reportData.reference_image)} className="w-full bg-indigo-600/20 border border-indigo-500/30 p-4 rounded-2xl flex items-center justify-between active-scale">
+                                            <div className="flex items-center">
+                                                <div className="w-10 h-10 rounded-lg overflow-hidden mr-3 border border-white/20"><img src={reportData.reference_image} className="w-full h-full object-cover" /></div>
+                                                <div className="text-left">
+                                                    <p className="text-sm font-bold text-indigo-300">查看附加圖表 / 原圖</p>
+                                                    <p className="text-[10px] text-indigo-400/70 uppercase font-black">Floor Plan & Requirement</p>
+                                                </div>
+                                            </div>
+                                            <i data-lucide="maximize-2" className="w-5 h-5 text-indigo-400"></i>
+                                        </button>
+                                    )}
+                                </div>
+                                
+                                <section className="bg-amber-500/5 border border-amber-500/20 p-6 rounded-[40px] space-y-3"><h3 className="text-sm font-black text-amber-500 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-5 h-5 mb-0.5"></i>VIP 接待</h3><p className="text-xl font-bold leading-relaxed whitespace-pre-line text-gray-100">{reportData.vip_pillar}</p></section>
+                                <section className="bg-indigo-500/5 border border-indigo-500/20 p-6 rounded-[40px] space-y-3"><h3 className="text-sm font-black text-indigo-400 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-5 h-5 mb-0.5"></i>觀眾管理</h3><p className="text-xl font-bold leading-relaxed whitespace-pre-line text-gray-100">{reportData.audience_pillar}</p></section>
+                                <section className="space-y-4"><h3 className="text-emerald-500 font-black text-sm uppercase tracking-widest px-2 flex items-center"><i data-lucide="box" className="mr-2 w-5 h-5 mb-0.5"></i>RP 空間任務</h3>{reportData.rp_pillar.map((item, i) => (<div key={i} className="bg-gray-900/80 border-l-4 border-emerald-500 p-6 rounded-[28px] space-y-2"><p className="text-2xl font-black tracking-tight text-emerald-400">{item.task}</p><p className="text-lg text-gray-300 font-medium italic leading-relaxed whitespace-pre-line">{item.detail}</p></div>))}</section>
+                                <section className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[32px] shadow-inner"><h3 className="text-rose-500 font-black text-sm uppercase tracking-widest mb-2 flex items-center"><i data-lucide="ban" className="mr-2 w-5 h-5 mb-0.5"></i>技術封位</h3><p className="text-3xl font-mono text-white font-black italic tracking-tighter">{reportData.tech_blocks}</p></section>
+                                
+                                <div className="grid grid-cols-2 gap-4 mt-8">
+                                    <button onClick={() => setActiveTab('history')} className="w-full bg-gray-800 text-white font-black py-5 rounded-[24px] text-sm uppercase active-scale border border-white/10">查看過往紀錄</button>
+                                    <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-5 rounded-[24px] text-sm uppercase active-scale shadow-lg">返回主頁</button>
+                                </div>
                             </div>
                         )}
                     </main>
 
                     {/* 底部導航 */}
-                    <nav className="bg-black border-t border-white/5 px-4 pb-12 pt-4 flex items-center justify-around sticky bottom-0 z-50 safe-bottom">
-                        <button onClick={() => setActiveTab('dashboard')} className={`flex-1 flex flex-col items-center ${activeTab === 'dashboard' ? 'text-white' : 'text-gray-600'}`}>
-                            <i data-lucide="layout-dashboard" className="w-8 h-8 mb-1"></i>
+                    <nav className="bg-black border-t border-white/5 px-6 pb-12 pt-4 flex items-center justify-between sticky bottom-0 z-50 safe-bottom">
+                        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'dashboard' ? 'text-white' : 'text-gray-600'}`}>
+                            <i data-lucide="layout-dashboard" className="w-7 h-7 mb-1.5"></i>
                             <span className="text-[10px] font-black uppercase">總覽</span>
                         </button>
-                        <div className="relative -top-12 px-4">
-                            <button onClick={() => fileInputRef.current.click()} className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(79,70,229,0.7)] border-[8px] border-[#050505] active-scale">
-                                <i data-lucide="camera" className="w-10 h-10 text-white"></i>
+                        <div className="relative -top-10">
+                            <button onClick={() => { resetForm(); setActiveTab('builder'); }} className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.5)] border-[6px] border-[#050505] active-scale">
+                                <i data-lucide="plus" className="w-10 h-10 text-white"></i>
                             </button>
-                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
                         </div>
-                        <button onClick={() => setActiveTab('report')} className={`flex-1 flex flex-col items-center ${activeTab === 'report' ? 'text-emerald-500' : 'text-gray-600'}`}>
-                            <i data-lucide="clipboard-list" className="w-8 h-8 mb-1"></i>
-                            <span className="text-[10px] font-black uppercase tracking-tighter">報告</span>
+                        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'history' ? 'text-white' : 'text-gray-600'}`}>
+                            <i data-lucide="history" className="w-7 h-7 mb-1.5"></i>
+                            <span className="text-[10px] font-black uppercase tracking-tighter">紀錄</span>
                         </button>
                     </nav>
-
-                    {isProcessing && (
-                        <div className="fixed inset-0 bg-black/98 z-[100] flex flex-col items-center justify-center p-12 text-center">
-                            <div className="animate-spin-custom mb-10 text-indigo-500"><i data-lucide="refresh-cw" className="w-20 h-20"></i></div>
-                            <h3 className="text-4xl font-black italic tracking-widest text-white uppercase tracking-tighter">Processing</h3>
-                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">正在處理圖片與資料...</p>
-                        </div>
-                    )}
                 </div>
             );
         };
