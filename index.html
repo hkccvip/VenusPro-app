@@ -4,19 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Balance Pro - 診斷修復版</title>
+    <title>Balance Pro - 權限修復版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; font-family: -apple-system, system-ui, sans-serif; height: 100vh; }
+        body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; font-family: -apple-system, system-ui, sans-serif; height: 100vh; margin: 0; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
         .active-scale:active { transform: scale(0.95); transition: 0.1s; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .animate-spin-custom { animation: spin 1s linear infinite; }
-        html, body { overflow: hidden; margin: 0; }
+        html, body { overflow: hidden; }
     </style>
 </head>
 <body>
@@ -30,36 +30,23 @@
             const [isProcessing, setIsProcessing] = useState(false);
             const [aiResult, setAiResult] = useState(null);
             const [errorMessage, setErrorMessage] = useState("");
-            const [debugInfo, setDebugInfo] = useState("");
+            const [debugJson, setDebugJson] = useState("");
             const [isDemoMode, setIsDemoMode] = useState(false);
-            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v4_key') || "");
+            
+            // 狀態存儲
+            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v5_key') || "");
+            const [modelName, setModelName] = useState(localStorage.getItem('foh_model') || "gemini-1.5-flash-latest");
             const fileInputRef = useRef(null);
 
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
-                localStorage.setItem('foh_v4_key', userKey);
-            }, [activeTab, aiResult, userKey, errorMessage]);
+                localStorage.setItem('foh_v5_key', userKey);
+                localStorage.setItem('foh_model', modelName);
+            }, [activeTab, aiResult, userKey, modelName, errorMessage]);
 
-            // --- 測試 API 健康狀態 ---
-            const checkApiHealth = async () => {
-                if (!userKey) { alert("請先輸入 API Key"); return; }
-                setIsProcessing(true);
-                try {
-                    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${userKey}`);
-                    const data = await resp.json();
-                    if (resp.ok) {
-                        const models = data.models.map(m => m.name.replace('models/', '')).join(', ');
-                        setDebugInfo(`可用模型清單：${models}`);
-                        alert("API 連線成功！您的 Key 支援多個模型。");
-                    } else {
-                        throw new Error(data.error?.message || "連線失敗");
-                    }
-                } catch (err) {
-                    setDebugInfo(`健康檢查失敗：${err.message}`);
-                    alert("檢查失敗，請確認 VPN 是否已開啟。");
-                } finally {
-                    setIsProcessing(false);
-                }
+            const clearAllData = () => {
+                localStorage.clear();
+                window.location.reload();
             };
 
             const runDemo = () => {
@@ -67,13 +54,13 @@
                 setTimeout(() => {
                     setAiResult({
                         event_name: "美狄亞 MEDEA",
-                        vip_pillar: "中英劇團嘉賓：預計 19:30 抵達。由 RP 在 Reception 設置 2R 4C 檯椅，需 2 名人員負責接待並引導至 RP 預留席。",
-                        audience_pillar: "12 歲以下禁入。演出中嚴禁攝影（謝幕除外）。Urbtix 驗票設於入口右側。",
+                        vip_pillar: "中英劇團嘉賓：19:30 抵達。大堂接待處 2R 4C。VIP 席位 CA 1-10。",
+                        audience_pillar: "12 歲以下禁入。嚴禁拍照。Urbtix 驗票。",
                         rp_pillar: [
-                            {task: "接待處 (Reception)", detail: "擺放 2 張長檯 (2R) 及 4 張椅子 (4C)，連白色檯布。"},
-                            {task: "酒會指示牌", detail: "Foyer 入口放置 A3 指示牌，指向 Podium 區域。"}
+                            {task: "大堂長檯 (2R)", detail: "擺放於 Foyer 正門，配 4 張椅及白色檯布。"},
+                            {task: "導引告示牌", detail: "A3 尺寸，指向 Podium 酒會區。"}
                         ],
-                        tech_blocks: "CA5-17, BQ13-15, DQ16-18"
+                        tech_blocks: "CA5-17, BQ13-15"
                     });
                     setActiveTab('report');
                     setIsProcessing(false);
@@ -82,108 +69,120 @@
 
             const handleFileAction = async (e) => {
                 if (isDemoMode) { runDemo(); return; }
-                if (!userKey) { setErrorMessage("請先設定 API Key 或開啟模擬模式。"); return; }
+                if (!userKey) { setErrorMessage("請先進入設定填寫 API Key。"); return; }
 
                 const file = e.target.files[0];
                 if (!file) return;
 
                 setIsProcessing(true);
                 setErrorMessage("");
-                setDebugInfo("");
+                setDebugJson("");
                 
                 const reader = new FileReader();
                 reader.onloadend = async () => {
                     const base64Data = reader.result.split(',')[1];
-                    const prompt = `分析此照片，回傳 JSON：{"event_name": "活動名", "vip_pillar": "嘉賓招待", "audience_pillar": "觀眾管理", "rp_pillar": [{"task": "物資", "detail": "細節"}], "tech_blocks": "座位號"}`;
+                    const prompt = `分析圖片內容，回傳 JSON：{"event_name": "活動", "vip_pillar": "嘉賓", "audience_pillar": "觀眾", "rp_pillar": [{"task": "物資", "detail": "擺位"}], "tech_blocks": "席號"}`;
 
-                    // 使用 v1beta 配合正確的模型路徑格式
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${userKey}`;
+                    // 嘗試不同的路徑與版本組合以解決 404 問題
+                    const endpoints = [
+                        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${userKey}`,
+                        `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${userKey}`
+                    ];
 
-                    try {
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/png", data: base64Data } }] }]
-                            })
-                        });
+                    let lastErr = "";
+                    for (let url of endpoints) {
+                        try {
+                            const response = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: "image/png", data: base64Data } }] }]
+                                })
+                            });
 
-                        const data = await response.json();
-                        if (!response.ok) {
-                            setDebugInfo(JSON.stringify(data, null, 2));
-                            throw new Error(data.error?.message || "Google 拒絕請求");
+                            const data = await response.json();
+                            if (response.ok) {
+                                const rawText = data.candidates[0].content.parts[0].text;
+                                const cleanJson = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+                                setAiResult(JSON.parse(cleanJson));
+                                setActiveTab('report');
+                                setIsProcessing(false);
+                                return;
+                            } else {
+                                lastErr = data.error?.message || "Unknown error";
+                                setDebugJson(JSON.stringify(data, null, 2));
+                            }
+                        } catch (err) {
+                            lastErr = err.message;
                         }
-
-                        const rawText = data.candidates[0].content.parts[0].text;
-                        const cleanJson = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-                        setAiResult(JSON.parse(cleanJson));
-                        setActiveTab('report');
-                    } catch (err) {
-                        setErrorMessage(err.message);
-                    } finally {
-                        setIsProcessing(false);
                     }
+                    
+                    setErrorMessage(`分析失敗：${lastErr}`);
+                    setIsProcessing(false);
                 };
                 reader.readAsDataURL(file);
             };
 
             return (
                 <div className="flex flex-col h-full overflow-hidden">
-                    <header className="px-6 pt-12 pb-5 border-b border-white/5 bg-black/80 backdrop-blur-xl flex justify-between items-center sticky top-0 z-50">
+                    {/* 頂欄 */}
+                    <header className="px-6 pt-12 pb-5 border-b border-white/10 bg-black/60 backdrop-blur-xl flex justify-between items-center sticky top-0 z-50">
                         <div>
                             <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase">BALANCE PRO</h1>
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">
-                                {isDemoMode ? '● 模擬模式' : '● 實時診斷中'}
-                            </p>
                         </div>
                         <button onClick={() => setActiveTab('settings')} className="p-3 bg-white/5 rounded-2xl text-gray-400 active-scale border border-white/5">
                             <i data-lucide="settings" className="w-6 h-6"></i>
                         </button>
                     </header>
 
+                    {/* 主內容區 */}
                     <main className="flex-1 overflow-y-auto p-6 pb-40">
                         {activeTab === 'dashboard' && (
                             <div className="space-y-8 animate-in fade-in">
-                                <h2 className="text-4xl font-black text-white leading-tight">運營現況</h2>
+                                <h2 className="text-4xl font-black text-white leading-tight font-serif">運營現況</h2>
                                 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-gray-900 border border-amber-500/20 p-6 rounded-[32px] space-y-1">
-                                        <p className="text-amber-500 text-xs font-black uppercase">嘉賓抵達</p>
+                                        <p className="text-amber-500 text-xs font-black uppercase">嘉賓</p>
                                         <p className="text-4xl font-black text-white">04</p>
                                     </div>
                                     <div className="bg-gray-900 border border-indigo-500/20 p-6 rounded-[32px] space-y-1">
-                                        <p className="text-indigo-500 text-xs font-black uppercase">觀眾進場</p>
+                                        <p className="text-indigo-500 text-xs font-black uppercase">觀眾</p>
                                         <p className="text-4xl font-black text-white">128</p>
                                     </div>
                                 </div>
 
                                 {errorMessage && (
-                                    <div className="bg-rose-500/10 border border-rose-500/30 p-6 rounded-[32px] space-y-3">
-                                        <h4 className="text-rose-500 font-black flex items-center text-lg italic"><i data-lucide="alert-triangle" className="mr-2"></i> 分析失敗</h4>
+                                    <div className="bg-rose-500/10 border border-rose-500/30 p-6 rounded-[32px] space-y-4">
+                                        <h4 className="text-rose-500 font-black flex items-center text-lg italic"><i data-lucide="alert-octagon" className="mr-2"></i> 模型連接失敗 (404)</h4>
                                         <p className="text-sm text-rose-100 font-bold leading-relaxed">{errorMessage}</p>
-                                        <div className="p-3 bg-black/40 rounded-xl text-[10px] font-mono text-gray-500 overflow-x-auto">
-                                            {debugInfo || "無詳細偵錯資訊"}
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] text-gray-500 font-bold uppercase">建議操作：</p>
+                                            <ul className="text-[11px] text-gray-400 list-disc pl-4 space-y-1">
+                                                <li>檢查 Google Cloud 是否已啟用 "Generative Language API"</li>
+                                                <li>在設定中嘗試更改模型名稱為 <b>gemini-pro-vision</b></li>
+                                                <li>確保 VPN 連線到美國或新加坡</li>
+                                            </ul>
                                         </div>
-                                        <div className="flex space-x-2 pt-2">
-                                            <button onClick={() => setActiveTab('settings')} className="flex-1 bg-rose-600 py-3 rounded-xl font-black text-xs">修復金鑰</button>
-                                            <button onClick={() => setIsDemoMode(true)} className="flex-1 bg-white/10 py-3 rounded-xl font-black text-xs">切換模擬</button>
+                                        <div className="p-3 bg-black/40 rounded-xl text-[9px] font-mono text-gray-600 overflow-x-auto">
+                                            {debugJson || "No debug data"}
                                         </div>
                                     </div>
                                 )}
 
-                                <div className="bg-white/5 p-8 rounded-[40px] border border-white/10 space-y-4 shadow-xl">
-                                    <h4 className="font-black text-indigo-400 text-xl flex items-center"><i data-lucide="zap" className="mr-2"></i>任務掃描</h4>
-                                    <p className="text-lg text-gray-400 leading-relaxed font-medium italic">拍攝 Requirement 文件，AI 將自動平衡三方動態。</p>
+                                <div className="bg-white/5 p-8 rounded-[40px] border border-white/10 space-y-4 shadow-xl active-scale" onClick={() => fileInputRef.current.click()}>
+                                    <h4 className="font-black text-indigo-400 text-xl flex items-center"><i data-lucide="camera" className="mr-2"></i>掃描 Requirement</h4>
+                                    <p className="text-lg text-gray-400 leading-relaxed font-medium italic">點擊此處拍照，自動平衡嘉賓、觀眾與 RP 空間細節。</p>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'settings' && (
-                            <div className="space-y-8 animate-in slide-in-from-right-10">
-                                <h2 className="text-3xl font-black text-white">系統診斷</h2>
+                            <div className="space-y-8 animate-in slide-in-from-right-10 pb-20">
+                                <h2 className="text-3xl font-black text-white">進階設定</h2>
                                 <div className="space-y-6">
-                                    <div className="bg-white/5 p-6 rounded-3xl border border-white/10 space-y-4">
-                                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Google API Key</p>
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-black text-gray-500 uppercase tracking-widest">Google API Key</label>
                                         <input 
                                             type="password"
                                             placeholder="AIzaSy..." 
@@ -191,65 +190,69 @@
                                             value={userKey}
                                             onChange={(e) => setUserKey(e.target.value)}
                                         />
-                                        <button onClick={checkApiHealth} className="w-full bg-white/10 py-3 rounded-xl text-xs font-black text-indigo-400 uppercase tracking-widest border border-indigo-500/20 active-scale">
-                                            檢查 API 健康狀態 & 模型清單
-                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-black text-gray-500 uppercase tracking-widest">模型名稱 (Model Name)</label>
+                                        <input 
+                                            type="text"
+                                            placeholder="gemini-1.5-flash-latest" 
+                                            className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white font-mono text-lg"
+                                            value={modelName}
+                                            onChange={(e) => setModelName(e.target.value)}
+                                        />
+                                        <p className="text-[10px] text-gray-600 italic">若 Flash 報錯，可嘗試輸入：gemini-1.5-pro</p>
                                     </div>
 
                                     <div className="flex items-center justify-between p-6 bg-amber-500/10 border border-amber-500/20 rounded-3xl">
                                         <div className="space-y-1">
                                             <p className="font-black text-amber-500 text-lg">演示模式 (Offline)</p>
-                                            <p className="text-[10px] text-amber-500/60 uppercase font-bold tracking-widest">無須 API 與 VPN</p>
+                                            <p className="text-[10px] text-amber-500/60 uppercase font-bold tracking-widest italic">無須 API 金鑰</p>
                                         </div>
                                         <input type="checkbox" className="w-8 h-8 rounded-lg accent-amber-500" checked={isDemoMode} onChange={() => setIsDemoMode(!isDemoMode)} />
                                     </div>
 
-                                    <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-6 rounded-[32px] text-xl active-scale shadow-2xl">
-                                        確認儲存並返回
-                                    </button>
+                                    <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-6 rounded-[32px] text-xl shadow-2xl active-scale uppercase tracking-tighter">Save & Exit</button>
                                     
-                                    {debugInfo && (
-                                        <div className="p-4 bg-gray-900 border border-white/5 rounded-2xl text-[10px] font-mono text-gray-500 whitespace-pre-wrap">
-                                            {debugInfo}
-                                        </div>
-                                    )}
+                                    <button onClick={clearAllData} className="w-full py-4 text-xs font-bold text-gray-600 uppercase border border-white/5 rounded-2xl">清除緩存並重置程式</button>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'report' && aiResult && (
                             <div className="space-y-8 animate-in slide-in-from-bottom-10 pb-20">
-                                <h2 className="text-3xl font-black text-white italic underline decoration-indigo-500/30 tracking-tighter uppercase">{aiResult.event_name}</h2>
-                                <section className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-[40px] space-y-3">
-                                    <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-4 h-4"></i> VIP 接待</h3>
+                                <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase border-b-2 border-indigo-500 pb-2">{aiResult.event_name}</h2>
+                                <section className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-[40px] space-y-3 shadow-lg shadow-amber-500/5">
+                                    <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-4 h-4"></i> VIP 接待方案</h3>
                                     <p className="text-xl text-gray-100 font-bold leading-relaxed">{aiResult.vip_pillar}</p>
                                 </section>
-                                <section className="bg-indigo-500/10 border border-indigo-500/20 p-6 rounded-[40px] space-y-3">
-                                    <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-4 h-4"></i> 觀眾管理</h3>
+                                <section className="bg-indigo-500/10 border border-indigo-500/20 p-6 rounded-[40px] space-y-3 shadow-lg shadow-indigo-500/5">
+                                    <h3 className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-4 h-4"></i> 觀眾管理規則</h3>
                                     <p className="text-xl text-gray-100 font-bold leading-relaxed">{aiResult.audience_pillar}</p>
                                 </section>
                                 <section className="space-y-4">
-                                    <h3 className="text-emerald-500 font-black text-xs uppercase tracking-widest px-2 flex items-center"><i data-lucide="box" className="mr-2 w-4 h-4"></i> RP 擺位任務</h3>
+                                    <h3 className="text-emerald-500 font-black text-xs uppercase tracking-widest px-2 flex items-center"><i data-lucide="box" className="mr-2 w-4 h-4"></i> RP 空間擺位任務</h3>
                                     {aiResult.rp_pillar.map((item, i) => (
-                                        <div key={i} className="bg-gray-900 border-l-4 border-emerald-500 p-6 rounded-2xl shadow-xl space-y-1 active-scale">
+                                        <div key={i} className="bg-gray-900 border-l-4 border-emerald-500 p-6 rounded-2xl shadow-xl space-y-1 active-scale transition-colors active:bg-gray-800">
                                             <p className="text-2xl font-black text-white tracking-tight">{item.task}</p>
-                                            <p className="text-lg text-gray-400 font-medium leading-relaxed">{item.detail}</p>
+                                            <p className="text-lg text-gray-400 font-medium leading-relaxed italic">{item.detail}</p>
                                         </div>
                                     ))}
                                 </section>
-                                <section className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[32px] space-y-2">
-                                    <h3 className="text-rose-500 font-black text-xs uppercase tracking-widest flex items-center"><i data-lucide="ban" className="mr-2 w-4 h-4"></i> 封位席號 (Tech)</h3>
+                                <section className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[32px] space-y-2 shadow-lg shadow-rose-500/5">
+                                    <h3 className="text-rose-500 font-black text-xs uppercase tracking-widest flex items-center"><i data-lucide="ban" className="mr-2 w-4 h-4"></i> 技術預留 (Tech Blocks)</h3>
                                     <p className="text-2xl font-mono text-white font-black tracking-tighter italic">{aiResult.tech_blocks}</p>
                                 </section>
-                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-white/5 border border-white/10 text-gray-500 font-black py-6 rounded-[32px] text-xl uppercase italic">Close Report</button>
+                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-white/5 border border-white/10 text-gray-500 font-black py-6 rounded-[32px] text-xl uppercase italic">Back to Console</button>
                             </div>
                         )}
                     </main>
 
+                    {/* 底部導航 */}
                     <nav className="bg-black border-t border-white/5 px-4 pb-12 pt-4 flex items-center justify-around sticky bottom-0 z-50 safe-bottom">
                         <button onClick={() => setActiveTab('dashboard')} className={`flex-1 flex flex-col items-center ${activeTab === 'dashboard' ? 'text-white' : 'text-gray-600'}`}>
                             <i data-lucide="layout-dashboard" className="w-8 h-8 mb-1"></i>
-                            <span className="text-[10px] font-black uppercase">總覽</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest">總覽</span>
                         </button>
                         <div className="relative -top-12 px-4">
                             <button onClick={() => fileInputRef.current.click()} className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(79,70,229,0.7)] border-[8px] border-[#050505] active-scale">
@@ -259,15 +262,15 @@
                         </div>
                         <button onClick={() => setActiveTab('report')} className={`flex-1 flex flex-col items-center ${activeTab === 'report' ? 'text-emerald-500' : 'text-gray-600'}`}>
                             <i data-lucide="clipboard-list" className="w-8 h-8 mb-1"></i>
-                            <span className="text-[10px] font-black uppercase">報告</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest">報告</span>
                         </button>
                     </nav>
 
                     {isProcessing && (
-                        <div className="fixed inset-0 bg-black/98 z-[100] flex flex-col items-center justify-center p-12 text-center animate-in fade-in duration-300">
+                        <div className="fixed inset-0 bg-black/98 z-[100] flex flex-col items-center justify-center p-12 text-center">
                             <div className="animate-spin-custom mb-10 text-indigo-500"><i data-lucide="refresh-cw" className="w-20 h-20"></i></div>
-                            <h3 className="text-4xl font-black italic tracking-widest text-white uppercase">Balancing</h3>
-                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">{isDemoMode ? '模擬數據同步中...' : '正在連線 AI 並偵測三方權限... (請確保 VPN 開啟)'}</p>
+                            <h3 className="text-4xl font-black italic tracking-widest text-white uppercase animate-pulse">Analyzing</h3>
+                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">{isDemoMode ? '正在同步模擬數據...' : '正在連線 AI 並匹配模型路徑... (請確認 VPN)'}</p>
                         </div>
                     )}
                 </div>
