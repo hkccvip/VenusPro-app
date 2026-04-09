@@ -3,36 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Balance Pro - 實戰版</title>
+    <title>Balance Pro - FOH & RP 智管家</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
     <style>
-        body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-        .active-scale:active { transform: scale(0.95); transition: 0.1s; }
-        .loading-ring { border: 4px solid rgba(255,255,255,0.1); border-top: 4px solid #4f46e5; border-radius: 50%; width: 40px; height: 40px; animate: spin 1s linear infinite; }
+        .active-scale:active { transform: scale(0.92); transition: 0.1s; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .animate-spin-custom { animation: spin 1s linear infinite; }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useRef } = React;
+        const { useState, useRef, useEffect } = React;
 
         const App = () => {
+            // --- 核心狀態 ---
             const [activeTab, setActiveTab] = useState('dashboard');
             const [isProcessing, setIsProcessing] = useState(false);
-            const [rpData, setRpData] = useState([]); // 存儲 AI 解析後的 RP 物資
-            const [vipStatus, setVipStatus] = useState("等待掃描...");
+            const [aiResult, setAiResult] = useState(null);
             const fileInputRef = useRef(null);
 
-            // 請在此處填入你的 Gemini API Key
+            // ==========================================
+            // 關鍵：請在此處填入你申請到的 Gemini API Key
+            // ==========================================
             const API_KEY = "AIzaSyBxLxfefhtO_-Iac2XSmkbwBPK2SAELLbw"; 
 
-            const handleFileUpload = async (e) => {
+            // --- 處理圖片上傳與 AI 解析 ---
+            const handleFileSelect = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
 
@@ -41,10 +45,16 @@
                 reader.onloadend = async () => {
                     const base64Data = reader.result.split(',')[1];
                     
-                    const prompt = `你是一個表演場地前台經理。請分析這張照片中的物資與嘉賓需求，並以 JSON 格式回傳：
+                    // 強化 Prompt：確保 AI 抓取 RP 擺位、方向、嘉賓及觀眾細節
+                    const prompt = `你是一個資深的表演場地前台經理。請分析這張圖片（技術需求表或告示），並嚴格按照以下 JSON 格式回傳資訊（不要包含 markdown 標籤）：
                     {
-                      "vip_note": "嘉賓接待重點簡述",
-                      "rp_list": [{"item": "物資名稱", "detail": "擺位與方向細節"}]
+                      "event_name": "活動名稱",
+                      "vip_pillar": "描述嘉賓接待要求、預留位置及特別儀式",
+                      "audience_pillar": "描述觀眾入場規則、攝影限制、驗票方式",
+                      "rp_pillar": [
+                        {"task": "物資名稱", "detail": "詳細擺位方向、數量及圍封要求"}
+                      ],
+                      "tech_blocks": "列出所有封閉座位編號"
                     }`;
 
                     try {
@@ -58,15 +68,15 @@
 
                         const data = await response.json();
                         const rawText = data.candidates[0].content.parts[0].text;
+                        // 清理 AI 回傳的雜訊
                         const cleanJson = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
                         const parsed = JSON.parse(cleanJson);
 
-                        setRpData(parsed.rp_list); // 將數據存入 RP 分頁
-                        setVipStatus(parsed.vip_note);
-                        alert("AI 分析完成！物資資料已更新至 RP 分頁。");
+                        setAiResult(parsed);
+                        setActiveTab('report'); // 自動跳轉到結果頁面
                     } catch (error) {
-                        console.error(error);
-                        alert("解析失敗，請確認 API Key 是否正確。");
+                        console.error("AI Error:", error);
+                        alert("解析失敗。請檢查 API Key 是否有效，或圖片是否清晰。");
                     } finally {
                         setIsProcessing(false);
                     }
@@ -76,95 +86,145 @@
 
             return (
                 <div className="flex flex-col h-screen overflow-hidden">
-                    {/* 頂欄 */}
-                    <header className="px-6 pt-12 pb-4 border-b border-white/10 bg-black/50 backdrop-blur-xl flex justify-between items-center">
+                    {/* 頂欄 (Header) - 字體加大 */}
+                    <header className="px-6 pt-12 pb-5 border-b border-white/10 bg-black/60 backdrop-blur-xl flex justify-between items-center sticky top-0 z-50">
                         <div>
-                            <h1 className="text-xl font-black italic tracking-tighter text-indigo-500 uppercase">Balance Pro</h1>
-                            <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest">● 行動同步模式</p>
+                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase">BALANCE PRO</h1>
+                            <p className="text-xs font-bold text-green-500 uppercase tracking-widest mt-1">● 行動同步模式</p>
+                        </div>
+                        <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10">
+                             <i className="lucide-shield-check text-indigo-400"></i>
                         </div>
                     </header>
 
                     {/* 主內容區 */}
-                    <main className="flex-1 overflow-y-auto p-6">
+                    <main className="flex-1 overflow-y-auto p-6 pb-32">
+                        
+                        {/* 1. 總覽面板 */}
                         {activeTab === 'dashboard' && (
-                            <div className="space-y-6">
-                                <h2 className="text-3xl font-black leading-tight">前台運營現況</h2>
+                            <div className="space-y-8 animate-in fade-in">
+                                <section>
+                                    <h2 className="text-3xl font-black text-white leading-tight">運營現況</h2>
+                                    <p className="text-gray-500 text-sm mt-1 font-bold">三方平衡：嘉賓 • 觀眾 • 物資</p>
+                                </section>
+                                
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-gray-900 border border-amber-500/20 p-5 rounded-[32px]">
-                                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">嘉賓狀態</p>
-                                        <p className="text-lg font-bold text-amber-500 leading-tight">{vipStatus}</p>
+                                    <div className="bg-gray-900 border border-amber-500/20 p-6 rounded-[32px] space-y-2">
+                                        <p className="text-amber-500 text-xs font-black uppercase tracking-widest">嘉賓接待</p>
+                                        <p className="text-4xl font-black text-white">04 <span className="text-sm text-gray-600">/ 15</span></p>
                                     </div>
-                                    <div className="bg-gray-900 border border-indigo-500/20 p-5 rounded-[32px]">
-                                        <p className="text-gray-500 text-[10px] font-bold uppercase mb-1">觀眾進場</p>
-                                        <p className="text-3xl font-black">128</p>
+                                    <div className="bg-gray-900 border border-indigo-500/20 p-6 rounded-[32px] space-y-2">
+                                        <p className="text-indigo-500 text-xs font-black uppercase tracking-widest">觀眾進場</p>
+                                        <p className="text-4xl font-black text-white">128</p>
+                                    </div>
+                                    <div className="bg-gray-900 border border-emerald-500/20 p-6 rounded-[32px] space-y-2">
+                                        <p className="text-emerald-500 text-xs font-black uppercase tracking-widest">RP 執行</p>
+                                        <p className="text-4xl font-black text-white">85%</p>
+                                    </div>
+                                    <div className="bg-gray-900 border border-rose-500/20 p-6 rounded-[32px] space-y-2">
+                                        <p className="text-rose-500 text-xs font-black uppercase tracking-widest">預警</p>
+                                        <p className="text-4xl font-black text-rose-500">01</p>
                                     </div>
                                 </div>
-                                <div className="bg-white/5 p-6 rounded-[32px] border border-white/10">
-                                    <h4 className="font-bold text-indigo-400">使用說明</h4>
-                                    <p className="text-sm text-gray-400 mt-2">點擊下方相機圖示，拍攝當日紙本 Requirement，系統會自動提取 RP 物資清單。</p>
+
+                                <div className="bg-white/5 p-8 rounded-[40px] border border-white/10 space-y-4 shadow-2xl">
+                                    <h4 className="font-black text-indigo-400 text-xl flex items-center">
+                                        <i className="lucide-info mr-2"></i>操作指引
+                                    </h4>
+                                    <p className="text-base text-gray-300 leading-relaxed">
+                                        點擊下方中間按鈕，可直接<b>拍照</b>或<b>從相簿匯入</b> Requirement。AI 將自動為你整理 RP 物資與座務細節。
+                                    </p>
                                 </div>
                             </div>
                         )}
 
-                        {activeTab === 'rp' && (
-                            <div className="space-y-6">
-                                <h2 className="text-3xl font-black leading-tight">RP 物資清單</h2>
-                                {rpData.length > 0 ? (
-                                    <div className="space-y-4">
-                                        {rpData.map((task, i) => (
-                                            <div key={i} className="bg-gray-900 border border-emerald-500/20 p-5 rounded-[24px]">
-                                                <p className="text-emerald-500 font-black text-lg">#{i+1} {task.item}</p>
-                                                <p className="text-gray-400 text-sm mt-1">{task.detail}</p>
-                                            </div>
-                                        ))}
+                        {/* 2. AI 報告頁面 (解析後顯示) */}
+                        {activeTab === 'report' && aiResult && (
+                            <div className="space-y-6 animate-in slide-in-from-bottom-10">
+                                <h2 className="text-2xl font-black text-indigo-400 italic">{aiResult.event_name}</h2>
+                                
+                                {/* 嘉賓與觀眾 */}
+                                <div className="grid gap-4">
+                                    <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-[32px]">
+                                        <h3 className="text-amber-500 font-black text-sm uppercase tracking-widest mb-2 flex items-center">
+                                            <i className="lucide-star mr-2"></i>嘉賓接待重點
+                                        </h3>
+                                        <p className="text-base text-gray-200 leading-relaxed font-medium">{aiResult.vip_pillar}</p>
                                     </div>
-                                ) : (
-                                    <div className="text-center py-20 text-gray-600">
-                                        <p className="text-4xl mb-4">📦</p>
-                                        <p>尚未掃描資料，請先使用相機拍攝</p>
+                                    <div className="bg-indigo-500/10 border border-indigo-500/20 p-6 rounded-[32px]">
+                                        <h3 className="text-indigo-400 font-black text-sm uppercase tracking-widest mb-2 flex items-center">
+                                            <i className="lucide-users mr-2"></i>觀眾管理細節
+                                        </h3>
+                                        <p className="text-base text-gray-200 leading-relaxed font-medium">{aiResult.audience_pillar}</p>
                                     </div>
-                                )}
+                                </div>
+
+                                {/* RP 任務清單 */}
+                                <div className="space-y-4">
+                                    <h3 className="text-emerald-500 font-black text-sm uppercase tracking-widest px-2 flex items-center">
+                                        <i className="lucide-box mr-2"></i>RP 物資擺位要求
+                                    </h3>
+                                    {aiResult.rp_pillar.map((item, i) => (
+                                        <div key={i} className="bg-gray-900 border-l-4 border-emerald-500 p-5 rounded-2xl shadow-lg">
+                                            <p className="text-lg font-black text-white">{item.task}</p>
+                                            <p className="text-sm text-gray-400 mt-2 leading-relaxed">{item.detail}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* 封位資訊 */}
+                                <div className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[32px]">
+                                    <h3 className="text-rose-500 font-black text-sm uppercase tracking-widest mb-3 flex items-center">
+                                        <i className="lucide-ban mr-2"></i>技術封位 (Tech Blocks)
+                                    </h3>
+                                    <p className="text-xl font-mono text-white font-black tracking-tighter">{aiResult.tech_blocks}</p>
+                                </div>
+
+                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-white/10 text-gray-400 font-bold py-4 rounded-2xl">
+                                    返回總覽
+                                </button>
                             </div>
                         )}
                     </main>
 
-                    {/* 底部導航 */}
-                    <nav className="bg-black border-t border-white/10 px-4 pb-10 pt-4 flex items-center justify-around sticky bottom-0 safe-bottom">
-                        <button onClick={() => setActiveTab('dashboard')} className={`flex-1 flex flex-col items-center ${activeTab === 'dashboard' ? 'text-indigo-500' : 'text-gray-600'}`}>
-                            <span className="text-2xl">📊</span>
-                            <span className="text-[10px] font-bold">總覽</span>
+                    {/* 底部導航 - 大字體與大按鈕 */}
+                    <nav className="bg-black border-t border-white/10 px-4 pb-12 pt-4 flex items-center justify-around sticky bottom-0 z-50 safe-bottom">
+                        <button onClick={() => setActiveTab('dashboard')} className={`flex-1 flex flex-col items-center space-y-1 ${activeTab === 'dashboard' ? 'text-white' : 'text-gray-600'}`}>
+                            <span className="text-3xl">📊</span>
+                            <span className="text-xs font-black">運營總覽</span>
                         </button>
                         
-                        <div className="relative -top-8 px-4">
+                        <div className="relative -top-10 px-4">
                             <button 
                                 onClick={() => fileInputRef.current.click()}
-                                className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center shadow-2xl border-[6px] border-[#050505] active-scale"
+                                className="w-24 h-24 bg-indigo-600 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(79,70,229,0.4)] border-[8px] border-[#050505] active-scale"
                             >
-                                <span className="text-3xl">📷</span>
+                                <span className="text-4xl">📷</span>
                             </button>
-                            {/* 隱藏的相機輸入，capture="environment" 會直接開啟相機 */}
+                            {/* 修正：移除 capture="environment" 以同時支援拍照與相簿匯入 */}
                             <input 
                                 type="file" 
                                 ref={fileInputRef} 
-                                onChange={handleFileUpload} 
+                                onChange={handleFileSelect} 
                                 accept="image/*" 
-                                capture="environment" 
                                 className="hidden" 
                             />
                         </div>
 
-                        <button onClick={() => setActiveTab('rp')} className={`flex-1 flex flex-col items-center ${activeTab === 'rp' ? 'text-emerald-500' : 'text-gray-600'}`}>
-                            <span className="text-2xl">📦</span>
-                            <span className="text-[10px] font-bold">RP物資</span>
+                        <button onClick={() => setActiveTab('report')} className={`flex-1 flex flex-col items-center space-y-1 ${activeTab === 'report' ? 'text-emerald-500' : 'text-gray-600'}`}>
+                            <span className="text-3xl">📦</span>
+                            <span className="text-xs font-black">RP 報告</span>
                         </button>
                     </nav>
 
-                    {/* 全螢幕讀取中 */}
+                    {/* AI 解析中全螢幕動畫 */}
                     {isProcessing && (
-                        <div className="fixed inset-0 bg-black/95 z-[100] flex flex-col items-center justify-center">
-                            <div className="loading-ring mb-6"></div>
-                            <h3 className="text-2xl font-black italic tracking-widest">ANALYZING...</h3>
-                            <p className="text-gray-500 text-sm mt-2">正在讀取紙本數據並分配 RP 任務</p>
+                        <div className="fixed inset-0 bg-black/98 z-[100] flex flex-col items-center justify-center p-10 text-center">
+                            <div className="animate-spin-custom mb-8">
+                                <span className="text-6xl">🌀</span>
+                            </div>
+                            <h3 className="text-3xl font-black italic tracking-widest text-white">ANALYZING...</h3>
+                            <p className="text-gray-400 text-lg mt-4 font-bold">正在掃描紙本 Requirement<br/>同步嘉賓、觀眾與 RP 數據</p>
                         </div>
                     )}
                 </div>
