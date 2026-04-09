@@ -142,7 +142,14 @@
                             >
                                 <span className="text-3xl">📷</span>
                             </button>
-                            <<input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
+                            {/* 隱藏的相機輸入，capture="environment" 會直接開啟相機 */}
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                onChange={handleFileUpload} 
+                                accept="image/*" 
+                                capture="environment" 
+                                className="hidden" 
                             />
                         </div>
 
