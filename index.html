@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Balance Pro - FOH 智管家</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@0.321.0/font/lucide.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        .active-scale:active { transform: scale(0.95); transition: 0.1s; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef } = React;
+
+        // 模擬 Lucide 圖示 (因 CDN 環境直接使用字體或簡單 SVG)
+        const Icon = ({ name, size = 24, className = "" }) => (
+            <i data-lucide={name} style={{ width: size, height: size }} className={`lucide-${name} ${className}`}></i>
+        );
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [isProcessing, setIsProcessing] = useState(false);
+            const fileInputRef = useRef(null);
+
+            const handleScan = () => {
+                setIsProcessing(true);
+                setTimeout(() => {
+                    setIsProcessing(false);
+                    alert("AI 掃描完成！已優化 RP 擺位與嘉賓名單。");
+                }, 2000);
+            };
+
+            return (
+                <div className="flex flex-col h-screen overflow-hidden">
+                    {/* 頂欄 */}
+                    <header className="px-6 pt-12 pb-4 border-b border-white/10 bg-black/50 backdrop-blur-xl flex justify-between items-center">
+                        <div>
+                            <h1 className="text-xl font-black italic italic tracking-tighter text-indigo-500">BALANCE PRO</h1>
+                            <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest">● 即時同步中</p>
+                        </div>
+                        <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center">
+                             <span className="text-gray-400">☰</span>
+                        </div>
+                    </header>
+
+                    {/* 主內容 */}
+                    <main className="flex-1 overflow-y-auto p-6 space-y-6">
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-6 animate-in fade-in">
+                                <h2 className="text-3xl font-black leading-tight">前台運營現況</h2>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-gray-900 border border-amber-500/20 p-5 rounded-[32px]">
+                                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">嘉賓抵達</p>
+                                        <p className="text-3xl font-black text-white">04 <span className="text-sm text-gray-600">/ 15</span></p>
+                                    </div>
+                                    <div className="bg-gray-900 border border-indigo-500/20 p-5 rounded-[32px]">
+                                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">觀眾進場</p>
+                                        <p className="text-3xl font-black text-white">128</p>
+                                    </div>
+                                    <div className="bg-gray-900 border border-emerald-500/20 p-5 rounded-[32px]">
+                                        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-1">RP 執行</p>
+                                        <p className="text-3xl font-black text-white">85%</p>
+                                    </div>
+                                    <div className="bg-gray-900 border border-rose-500/20 p-5 rounded-[32px]">
+                                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">預警</p>
+                                        <p className="text-3xl font-black text-rose-500">01</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-indigo-600/10 border border-indigo-500/20 p-6 rounded-[32px]">
+                                    <h4 className="font-bold text-white text-lg">RP 提醒：酒會擺位</h4>
+                                    <p className="text-sm text-gray-400 mt-1 italic">請確保指示牌指向正門大堂，並留出 VIP 通道。</p>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* 底部導航 */}
+                    <nav className="bg-black/80 backdrop-blur-3xl border-t border-white/10 px-4 pb-10 pt-4 flex items-center justify-around sticky bottom-0 safe-bottom">
+                        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center flex-1 ${activeTab === 'dashboard' ? 'text-white' : 'text-gray-500'}`}>
+                            <span className="text-2xl">📊</span>
+                            <span className="text-[10px] font-bold mt-1">總覽</span>
+                        </button>
+                        
+                        <div className="relative -top-8 px-4">
+                            <button 
+                                onClick={handleScan}
+                                className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center shadow-2xl border-[6px] border-[#050505] active-scale"
+                            >
+                                <span className="text-2xl text-white">📷</span>
+                            </button>
+                        </div>
+
+                        <button onClick={() => setActiveTab('rp')} className={`flex flex-col items-center flex-1 ${activeTab === 'rp' ? 'text-emerald-500' : 'text-gray-500'}`}>
+                            <span className="text-2xl">📦</span>
+                            <span className="text-[10px] font-bold mt-1">RP物資</span>
+                        </button>
+                    </nav>
+
+                    {/* Loading 動畫 */}
+                    {isProcessing && (
+                        <div className="fixed inset-0 bg-black/95 z-[100] flex flex-col items-center justify-center">
+                            <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+                            <h3 className="text-2xl font-black italic">ANALYZING...</h3>
+                            <p className="text-gray-500 text-sm mt-2">同步三方平衡數據中</p>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
