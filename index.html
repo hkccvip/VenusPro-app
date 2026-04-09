@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Balance Pro - 全模型解鎖版</title>
+    <title>Balance Pro - 極簡防呆版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; margin: 0; }
+        body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; font-family: system-ui, sans-serif; margin: 0; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
         .active-scale:active { transform: scale(0.94); transition: 0.1s; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -31,39 +31,28 @@
             const [aiResult, setAiResult] = useState(null);
             const [errorMessage, setErrorMessage] = useState("");
             const [isDemoMode, setIsDemoMode] = useState(false);
-            
-            // 儲存狀態
-            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v8_key') || "");
-            const [modelName, setModelName] = useState(localStorage.getItem('foh_v8_model') || "gemini-1.5-flash");
+            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v9_key') || "");
             const fileInputRef = useRef(null);
 
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
-                localStorage.setItem('foh_v8_key', userKey);
-                localStorage.setItem('foh_v8_model', modelName);
-            }, [activeTab, aiResult, userKey, modelName, errorMessage]);
+                localStorage.setItem('foh_v9_key', userKey);
+            }, [activeTab, aiResult, userKey, errorMessage]);
 
-            // --- API 診斷功能 ---
-            const checkApiHealth = async () => {
-                if (!userKey) {
-                    alert("請先輸入 API Key！");
-                    return;
-                }
+            // --- 診斷金鑰狀態 ---
+            const testKeyStatus = async () => {
+                if (!userKey) { alert("請先輸入金鑰！"); return; }
                 setIsProcessing(true);
                 try {
                     const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${userKey}`);
                     const data = await resp.json();
                     if (resp.ok) {
-                        const visionModels = data.models
-                            .filter(m => m.name.includes('vision') || m.name.includes('1.5'))
-                            .map(m => m.name.replace('models/', ''))
-                            .join('\n- ');
-                        alert(`診斷成功！您的金鑰支援以下視覺模型：\n\n- ${visionModels}\n\n請在設定中選擇其中一個。`);
+                        alert("✅ 恭喜！金鑰完全正常，且 VPN 連線成功！可以開始拍照分析了。");
                     } else {
-                        alert(`診斷失敗：\n${data.error?.message}`);
+                        alert(`❌ 金鑰無效或被封鎖：\n${data.error?.message}\n\n請重新申請金鑰或檢查 VPN。`);
                     }
                 } catch (err) {
-                    alert(`連線錯誤，請確保 VPN 已開啟：\n${err.message}`);
+                    alert(`❌ 網路錯誤 (VPN可能斷線)：\n${err.message}`);
                 } finally {
                     setIsProcessing(false);
                 }
@@ -73,15 +62,14 @@
                 setIsProcessing(true);
                 setTimeout(() => {
                     setAiResult({
-                        event_name: "美狄亞 MEDEA",
-                        vip_pillar: "接待處 2R 4C。VIP 預留席 CA 1-10 號。",
-                        audience_pillar: "嚴禁攝影。遲到進場設於中場。",
+                        event_name: "美狄亞 MEDEA (演示)",
+                        vip_pillar: "接待處設於大堂中央 (2R 4C)。VIP 席位 CA 1-10 號。",
+                        audience_pillar: "嚴禁攝影。遲到者中場進場。",
                         rp_pillar: [
                             {task: "接待長檯 (2R)", detail: "Foyer 正門，配 4 椅及白檯布。"},
-                            {task: "告示牌", detail: "指向 Podium 酒會區域。"},
                             {task: "封位區", detail: "CA5-17 排紅繩封閉。"}
                         ],
-                        tech_blocks: "CA5-17, BQ13-15"
+                        tech_blocks: "CA5-17"
                     });
                     setActiveTab('report');
                     setIsProcessing(false);
@@ -92,11 +80,7 @@
                 if (isDemoMode) { runDemo(); return; }
                 const file = e.target.files[0];
                 if (!file) return;
-
-                if (!userKey) {
-                    setErrorMessage("請先進入右上角設定 API 金鑰。");
-                    return;
-                }
+                if (!userKey) { setErrorMessage("請先進入右上角設定 API 金鑰。"); return; }
 
                 setIsProcessing(true);
                 setErrorMessage("");
@@ -106,7 +90,8 @@
                     const base64Data = reader.result.split(',')[1];
                     const prompt = `分析照片，回傳 JSON：{"event_name":"活動","vip_pillar":"嘉賓","audience_pillar":"觀眾","rp_pillar":[{"task":"物資","detail":"擺位"}],"tech_blocks":"席號"}`;
                     
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${userKey}`;
+                    // 強制鎖定最新且唯一的 flash 模型
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${userKey}`;
 
                     try {
                         const response = await fetch(url, {
@@ -117,7 +102,7 @@
 
                         const data = await response.json();
                         if (!response.ok) {
-                            throw new Error(`[${modelName}] 拒絕存取: ${data.error?.message || "未知的權限錯誤"}`);
+                            throw new Error(data.error?.message || "伺服器拒絕連線");
                         }
 
                         const cleanText = data.candidates[0].content.parts[0].text.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -134,17 +119,15 @@
 
             return (
                 <div className="flex flex-col h-full overflow-hidden select-none">
-                    {/* 頂欄 - 加入版本號方便確認是否有更新成功 */}
                     <header className="px-6 pt-12 pb-5 border-b border-white/5 bg-black/60 backdrop-blur-xl flex justify-between items-center">
                         <div>
-                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none">BALANCE PRO <span className="text-xs text-gray-500">v8.0</span></h1>
+                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none">BALANCE PRO <span className="text-xs text-gray-500">v9</span></h1>
                         </div>
                         <button onClick={() => setActiveTab('settings')} className="p-3 bg-white/5 rounded-2xl text-gray-400 active-scale border border-white/10">
                             <i data-lucide="settings" className="w-6 h-6"></i>
                         </button>
                     </header>
 
-                    {/* 主區 */}
                     <main className="flex-1 overflow-y-auto p-6 pb-40">
                         {activeTab === 'dashboard' && (
                             <div className="space-y-8 animate-in fade-in">
@@ -163,14 +146,10 @@
 
                                 {errorMessage && (
                                     <div className="bg-rose-500/10 border border-rose-500/30 p-6 rounded-[32px] space-y-3 shadow-xl">
-                                        <h4 className="text-rose-500 font-black flex items-center italic text-lg"><i data-lucide="alert-circle" className="mr-2"></i> 模型無權限 (404)</h4>
+                                        <h4 className="text-rose-500 font-black flex items-center italic text-lg"><i data-lucide="alert-circle" className="mr-2"></i> 分析失敗</h4>
                                         <p className="text-sm text-rose-100 font-bold leading-relaxed">{errorMessage}</p>
-                                        <div className="bg-black/50 p-3 rounded-xl">
-                                            <p className="text-xs text-rose-300 font-bold mb-1">解決方案：</p>
-                                            <p className="text-xs text-gray-400">請進入設定，將模型切換為 <b>gemini-pro-vision</b> 或 <b>gemini-1.5-pro</b>。</p>
-                                        </div>
                                         <div className="flex space-x-2 pt-2">
-                                            <button onClick={() => setActiveTab('settings')} className="flex-1 bg-rose-600 py-3 rounded-xl font-black text-xs uppercase">前往設定</button>
+                                            <button onClick={() => setActiveTab('settings')} className="flex-1 bg-rose-600 py-3 rounded-xl font-black text-xs uppercase">檢查金鑰</button>
                                             <button onClick={() => setIsDemoMode(true)} className="flex-1 bg-white/10 py-3 rounded-xl font-black text-xs uppercase">切換演示</button>
                                         </div>
                                     </div>
@@ -178,7 +157,7 @@
 
                                 <div className="bg-white/5 p-8 rounded-[40px] border border-white/10 active-scale shadow-2xl" onClick={() => fileInputRef.current.click()}>
                                     <h4 className="font-black text-indigo-400 text-xl flex items-center mb-2 italic"><i data-lucide="camera" className="mr-2"></i>智聯掃描</h4>
-                                    <p className="text-lg text-gray-400 leading-relaxed font-bold italic">拍攝或匯入 Requirement，AI 將同步嘉賓、觀眾與 RP 空間任務。</p>
+                                    <p className="text-lg text-gray-400 leading-relaxed font-bold italic">拍攝或匯入文件，AI 將同步嘉賓、觀眾與 RP 空間任務。</p>
                                 </div>
                             </div>
                         )}
@@ -187,9 +166,8 @@
                             <div className="space-y-8 animate-in slide-in-from-right-10 pb-10">
                                 <h2 className="text-3xl font-black text-white italic">系統設定</h2>
                                 <div className="space-y-6">
-                                    
                                     <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">1. 輸入金鑰</label>
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Google API Key</label>
                                         <input 
                                             type="password"
                                             placeholder="AIzaSy..." 
@@ -197,23 +175,9 @@
                                             value={userKey}
                                             onChange={(e) => setUserKey(e.target.value)}
                                         />
-                                        <button onClick={checkApiHealth} className="w-full bg-indigo-500/20 text-indigo-400 font-bold py-3 rounded-xl text-sm border border-indigo-500/30 active-scale">
-                                            測試金鑰並列出可用模型
+                                        <button onClick={testKeyStatus} className="w-full bg-indigo-500/20 text-indigo-400 font-bold py-4 rounded-xl text-sm border border-indigo-500/30 active-scale">
+                                            診斷金鑰狀態 (需開 VPN)
                                         </button>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">2. 選擇 AI 模型 (解決 404)</label>
-                                        <select 
-                                            className="w-full bg-gray-900 border border-white/10 p-5 rounded-2xl text-white font-bold text-lg outline-none"
-                                            value={modelName}
-                                            onChange={(e) => setModelName(e.target.value)}
-                                        >
-                                            <option value="gemini-1.5-flash">Gemini 1.5 Flash (預設)</option>
-                                            <option value="gemini-pro-vision">Gemini Pro Vision (推薦舊金鑰使用)</option>
-                                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                            <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash 最新版</option>
-                                        </select>
                                     </div>
 
                                     <div className="flex items-center justify-between p-6 bg-amber-500/10 border border-amber-500/20 rounded-3xl">
@@ -225,19 +189,15 @@
                                     </div>
 
                                     <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-6 rounded-[32px] text-xl shadow-2xl active-scale">儲存並返回</button>
-                                    
-                                    <button onClick={() => window.location.reload(true)} className="w-full py-4 text-[10px] font-black text-gray-700 uppercase tracking-widest">
-                                        強制重新載入程式
-                                    </button>
                                 </div>
                             </div>
                         )}
 
                         {activeTab === 'report' && aiResult && (
-                            <div className="space-y-8 animate-in slide-in-from-bottom-10 pb-20">
+                            <div className="space-y-8 animate-in slide-in-from-bottom-10 pb-20 text-white">
                                 <h2 className="text-3xl font-black text-indigo-500 italic border-b-2 border-indigo-500/30 pb-2 uppercase tracking-tighter">{aiResult.event_name}</h2>
                                 <section className="bg-amber-500/5 border border-amber-500/20 p-6 rounded-[40px] space-y-2">
-                                    <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest"><i data-lucide="star" className="inline w-4 h-4 mr-2"></i>嘉賓招待</h3>
+                                    <h3 className="text-xs font-black text-amber-500 uppercase tracking-widest"><i data-lucide="star" className="inline w-4 h-4 mr-2"></i>VIP 接待</h3>
                                     <p className="text-xl font-bold leading-relaxed">{aiResult.vip_pillar}</p>
                                 </section>
                                 <section className="bg-indigo-500/5 border border-indigo-500/20 p-6 rounded-[40px] space-y-2">
@@ -258,7 +218,6 @@
                         )}
                     </main>
 
-                    {/* 底部導航 */}
                     <nav className="bg-black border-t border-white/5 px-4 pb-12 pt-4 flex items-center justify-around sticky bottom-0 z-50 safe-bottom">
                         <button onClick={() => setActiveTab('dashboard')} className={`flex-1 flex flex-col items-center ${activeTab === 'dashboard' ? 'text-white' : 'text-gray-600'}`}>
                             <i data-lucide="layout-dashboard" className="w-8 h-8 mb-1"></i>
@@ -272,7 +231,7 @@
                         </div>
                         <button onClick={() => setActiveTab('report')} className={`flex-1 flex flex-col items-center ${activeTab === 'report' ? 'text-emerald-500' : 'text-gray-600'}`}>
                             <i data-lucide="clipboard-list" className="w-8 h-8 mb-1"></i>
-                            <span className="text-[10px] font-black uppercase tracking-tighter">報告</span>
+                            <span className="text-[10px] font-black uppercase">報告</span>
                         </button>
                     </nav>
 
@@ -280,7 +239,7 @@
                         <div className="fixed inset-0 bg-black/98 z-[100] flex flex-col items-center justify-center p-12 text-center">
                             <div className="animate-spin-custom mb-10 text-indigo-500"><i data-lucide="refresh-cw" className="w-20 h-20"></i></div>
                             <h3 className="text-4xl font-black italic tracking-widest text-white uppercase tracking-tighter">Syncing</h3>
-                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">{isDemoMode ? '演示同步中...' : `正在使用 [${modelName}] 解析...`}</p>
+                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">{isDemoMode ? '演示同步中...' : '正在分析照片並平衡任務...'}</p>
                         </div>
                     )}
                 </div>
