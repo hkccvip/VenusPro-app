@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Balance Pro - v10 終極版</title>
+    <title>Balance Pro - v11 雙核版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -17,6 +17,9 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .animate-spin-custom { animation: spin 1s linear infinite; }
         html, body, #root { height: 100%; overflow: hidden; }
+        /* 隱藏捲軸但可滾動 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body>
@@ -26,83 +29,37 @@
         const { useState, useRef, useEffect } = React;
 
         const App = () => {
-            const [activeTab, setActiveTab] = useState('settings'); // 預設先進入設定頁面
+            const [activeTab, setActiveTab] = useState('dashboard');
             const [isProcessing, setIsProcessing] = useState(false);
             const [aiResult, setAiResult] = useState(null);
             const [errorMessage, setErrorMessage] = useState("");
-            const [isDemoMode, setIsDemoMode] = useState(false);
             
             // 儲存狀態
-            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v10_key') || "");
-            const [availableModels, setAvailableModels] = useState(() => {
-                const saved = localStorage.getItem('foh_v10_models');
-                return saved ? JSON.parse(saved) : ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro-latest", "gemini-pro-vision"];
-            });
-            const [selectedModel, setSelectedModel] = useState(localStorage.getItem('foh_v10_selected_model') || "gemini-1.5-flash-latest");
+            const [userKey, setUserKey] = useState(localStorage.getItem('foh_v11_key') || "");
+            const [selectedModel, setSelectedModel] = useState(localStorage.getItem('foh_v11_model') || "gemini-1.5-flash-latest");
             
+            // 手動輸入的狀態
+            const [manualForm, setManualForm] = useState({
+                event_name: "", vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: ""
+            });
+
             const fileInputRef = useRef(null);
 
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
-                localStorage.setItem('foh_v10_key', userKey);
-                localStorage.setItem('foh_v10_models', JSON.stringify(availableModels));
-                localStorage.setItem('foh_v10_selected_model', selectedModel);
-            }, [activeTab, aiResult, userKey, availableModels, selectedModel]);
+                localStorage.setItem('foh_v11_key', userKey);
+                localStorage.setItem('foh_v11_model', selectedModel);
+            }, [activeTab, aiResult, userKey, selectedModel, errorMessage]);
 
-            // --- 終極武器：自動獲取可用模型清單 ---
-            const fetchAvailableModels = async () => {
-                if (!userKey) { alert("請先輸入 API Key！"); return; }
-                setIsProcessing(true);
-                try {
-                    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${userKey}`);
-                    const data = await resp.json();
-                    
-                    if (resp.ok) {
-                        // 過濾出支援 "generateContent" 的模型
-                        const validModels = data.models
-                            .filter(m => m.supportedGenerationMethods?.includes("generateContent"))
-                            .map(m => m.name.replace("models/", ""));
-                        
-                        if (validModels.length > 0) {
-                            setAvailableModels(validModels);
-                            setSelectedModel(validModels.find(m => m.includes('1.5-flash')) || validModels[0]);
-                            alert("✅ 成功！已自動為您抓取此金鑰專屬的可用模型清單。\n請在下方選單確認。");
-                        } else {
-                            alert("⚠️ 金鑰有效，但此金鑰沒有任何可用模型的權限。");
-                        }
-                    } else {
-                        alert(`❌ 金鑰或連線無效：\n${data.error?.message}`);
-                    }
-                } catch (err) {
-                    alert(`❌ 網路錯誤 (請確認 VPN)：\n${err.message}`);
-                } finally {
-                    setIsProcessing(false);
-                }
-            };
-
-            const runDemo = () => {
-                setIsProcessing(true);
-                setTimeout(() => {
-                    setAiResult({
-                        event_name: "美狄亞 MEDEA (演示)",
-                        vip_pillar: "接待處設於大堂中央 (2R 4C)。VIP 席位 CA 1-10 號。",
-                        audience_pillar: "嚴禁攝影。遲到者中場進場。",
-                        rp_pillar: [
-                            {task: "接待長檯 (2R)", detail: "Foyer 正門，配 4 椅及白檯布。"},
-                            {task: "封位區", detail: "CA5-17 排紅繩封閉。"}
-                        ],
-                        tech_blocks: "CA5-17"
-                    });
-                    setActiveTab('report');
-                    setIsProcessing(false);
-                }, 800);
-            };
-
+            // --- 處理 AI 圖片解析 ---
             const handleFileSelect = async (e) => {
-                if (isDemoMode) { runDemo(); return; }
                 const file = e.target.files[0];
                 if (!file) return;
-                if (!userKey) { setErrorMessage("請先進入右上角設定 API 金鑰。"); setActiveTab('settings'); return; }
+
+                if (!userKey) {
+                    setErrorMessage("未設定 API Key。您可以選擇使用「手動建檔」模式。");
+                    return;
+                }
 
                 setIsProcessing(true);
                 setErrorMessage("");
@@ -112,7 +69,6 @@
                     const base64Data = reader.result.split(',')[1];
                     const prompt = `分析照片，回傳 JSON：{"event_name":"活動","vip_pillar":"嘉賓","audience_pillar":"觀眾","rp_pillar":[{"task":"物資","detail":"擺位"}],"tech_blocks":"席號"}`;
                     
-                    // 使用使用者選擇的正確模型
                     const url = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${userKey}`;
 
                     try {
@@ -124,7 +80,7 @@
 
                         const data = await response.json();
                         if (!response.ok) {
-                            throw new Error(`[${selectedModel}] 拒絕連線：${data.error?.message}`);
+                            throw new Error(`Google 拒絕連線：${data.error?.message || "專案無權限"}`);
                         }
 
                         const cleanText = data.candidates[0].content.parts[0].text.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -139,18 +95,45 @@
                 reader.readAsDataURL(file);
             };
 
+            // --- 處理手動建檔 ---
+            const handleManualSubmit = () => {
+                if (!manualForm.event_name) {
+                    alert("請至少輸入活動名稱！");
+                    return;
+                }
+                
+                // 將使用者輸入的多行文字，轉換為 RP 任務陣列
+                const rpArray = manualForm.rp_tasks.split('\n').filter(t => t.trim() !== '').map((task, index) => {
+                    return { task: `任務 ${index + 1}`, detail: task.trim() };
+                });
+
+                const formattedResult = {
+                    event_name: manualForm.event_name,
+                    vip_pillar: manualForm.vip_pillar || "無特別指示",
+                    audience_pillar: manualForm.audience_pillar || "無特別指示",
+                    rp_pillar: rpArray.length > 0 ? rpArray : [{task: "常規巡查", detail: "保持前台與大堂整潔"}],
+                    tech_blocks: manualForm.tech_blocks || "無"
+                };
+
+                setAiResult(formattedResult);
+                setActiveTab('report');
+            };
+
             return (
                 <div className="flex flex-col h-full overflow-hidden select-none">
                     <header className="px-6 pt-12 pb-5 border-b border-white/5 bg-black/60 backdrop-blur-xl flex justify-between items-center">
                         <div>
-                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none">BALANCE PRO <span className="text-xs text-gray-500">v10</span></h1>
+                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none">BALANCE PRO <span className="text-xs text-gray-500">v11</span></h1>
+                            <p className="text-[10px] font-bold text-gray-500 uppercase mt-1">雙核驅動：AI & 手動模式</p>
                         </div>
                         <button onClick={() => setActiveTab('settings')} className={`p-3 rounded-2xl active-scale border ${activeTab === 'settings' ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/50' : 'bg-white/5 text-gray-400 border-white/10'}`}>
                             <i data-lucide="settings" className="w-6 h-6"></i>
                         </button>
                     </header>
 
-                    <main className="flex-1 overflow-y-auto p-6 pb-40">
+                    <main className="flex-1 overflow-y-auto p-6 pb-40 no-scrollbar">
+                        
+                        {/* --- 總覽面板 --- */}
                         {activeTab === 'dashboard' && (
                             <div className="space-y-8 animate-in fade-in">
                                 <h2 className="text-4xl font-black text-white leading-tight">運營平衡</h2>
@@ -168,68 +151,103 @@
 
                                 {errorMessage && (
                                     <div className="bg-rose-500/10 border border-rose-500/30 p-6 rounded-[32px] space-y-3 shadow-xl">
-                                        <h4 className="text-rose-500 font-black flex items-center italic text-lg"><i data-lucide="alert-circle" className="mr-2"></i> 分析失敗</h4>
-                                        <p className="text-sm text-rose-100 font-bold leading-relaxed">{errorMessage}</p>
-                                        <div className="flex space-x-2 pt-2">
-                                            <button onClick={() => setActiveTab('settings')} className="flex-1 bg-rose-600 py-3 rounded-xl font-black text-xs uppercase">前往更換模型</button>
-                                        </div>
+                                        <h4 className="text-rose-500 font-black flex items-center italic text-lg"><i data-lucide="alert-circle" className="mr-2"></i> 分析失敗 (專案封鎖)</h4>
+                                        <p className="text-xs text-rose-100 font-bold leading-relaxed">{errorMessage}</p>
+                                        <p className="text-xs text-rose-300 font-bold">💡 建議：Google 已封鎖您的 API Key。請直接使用下方的「手動建檔」，依然能產出完美的報告！</p>
                                     </div>
                                 )}
 
-                                <div className="bg-indigo-600/10 border border-indigo-500/20 p-8 rounded-[40px] active-scale shadow-2xl" onClick={() => fileInputRef.current.click()}>
-                                    <h4 className="font-black text-indigo-400 text-xl flex items-center mb-2 italic"><i data-lucide="camera" className="mr-2"></i>點擊掃描</h4>
-                                    <p className="text-sm text-indigo-200/70 leading-relaxed font-bold">拍攝 Requirement，自動分配嘉賓、觀眾與 RP 空間任務。</p>
+                                <div className="grid gap-4">
+                                    <div className="bg-indigo-600/10 border border-indigo-500/30 p-6 rounded-[32px] active-scale shadow-lg flex items-center justify-between" onClick={() => fileInputRef.current.click()}>
+                                        <div>
+                                            <h4 className="font-black text-indigo-400 text-lg flex items-center mb-1"><i data-lucide="camera" className="mr-2 w-5 h-5"></i>AI 拍照分析</h4>
+                                            <p className="text-xs text-indigo-200/70 font-bold">需設定可用之金鑰</p>
+                                        </div>
+                                        <i data-lucide="chevron-right" className="text-indigo-400"></i>
+                                    </div>
+
+                                    <div className="bg-emerald-600/10 border border-emerald-500/30 p-6 rounded-[32px] active-scale shadow-lg flex items-center justify-between" onClick={() => setActiveTab('manual')}>
+                                        <div>
+                                            <h4 className="font-black text-emerald-400 text-lg flex items-center mb-1"><i data-lucide="pen-tool" className="mr-2 w-5 h-5"></i>手動快速建檔</h4>
+                                            <p className="text-xs text-emerald-200/70 font-bold">免翻牆、免金鑰、100% 穩定</p>
+                                        </div>
+                                        <i data-lucide="chevron-right" className="text-emerald-400"></i>
+                                    </div>
                                 </div>
                             </div>
                         )}
 
+                        {/* --- 手動建檔面板 --- */}
+                        {activeTab === 'manual' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-10">
+                                <h2 className="text-3xl font-black text-white italic">手動建檔</h2>
+                                <p className="text-sm text-gray-400">將紙本資訊快速數位化，排版出專業的 RP 報告。</p>
+
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">活動名稱 (必填)</label>
+                                        <input type="text" placeholder="例如：美狄亞 MEDEA" className="w-full bg-gray-900 border border-white/10 p-4 rounded-2xl text-white font-bold text-lg" 
+                                            value={manualForm.event_name} onChange={e => setManualForm({...manualForm, event_name: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-amber-500 uppercase tracking-widest">嘉賓接待 VIP (選填)</label>
+                                        <textarea placeholder="接待處位置、特別要求..." className="w-full bg-gray-900 border border-amber-500/20 p-4 rounded-2xl text-white font-medium" rows="2"
+                                            value={manualForm.vip_pillar} onChange={e => setManualForm({...manualForm, vip_pillar: e.target.value})}></textarea>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">觀眾管理 General (選填)</label>
+                                        <textarea placeholder="進場規則、攝影限制..." className="w-full bg-gray-900 border border-indigo-500/20 p-4 rounded-2xl text-white font-medium" rows="2"
+                                            value={manualForm.audience_pillar} onChange={e => setManualForm({...manualForm, audience_pillar: e.target.value})}></textarea>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">RP 物資擺位任務 (一行一個)</label>
+                                        <textarea placeholder="1. 大堂正門放置 2R4C 長檯&#10;2. 入口處放置 A3 指示牌" className="w-full bg-gray-900 border border-emerald-500/20 p-4 rounded-2xl text-white font-medium leading-relaxed" rows="4"
+                                            value={manualForm.rp_tasks} onChange={e => setManualForm({...manualForm, rp_tasks: e.target.value})}></textarea>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest">技術封位 Tech Blocks (選填)</label>
+                                        <input type="text" placeholder="例如：CA5-17" className="w-full bg-gray-900 border border-rose-500/20 p-4 rounded-2xl text-white font-mono" 
+                                            value={manualForm.tech_blocks} onChange={e => setManualForm({...manualForm, tech_blocks: e.target.value})} />
+                                    </div>
+
+                                    <button onClick={handleManualSubmit} className="w-full bg-emerald-600 text-white font-black py-5 rounded-[24px] text-lg shadow-xl active-scale uppercase tracking-tighter">
+                                        生成平衡報告
+                                    </button>
+                                    <button onClick={() => setActiveTab('dashboard')} className="w-full bg-transparent text-gray-500 font-bold py-3 rounded-[24px] text-sm uppercase">
+                                        取消
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* --- 設定面板 --- */}
                         {activeTab === 'settings' && (
                             <div className="space-y-8 animate-in slide-in-from-right-10 pb-10">
-                                <h2 className="text-3xl font-black text-white italic">系統設定與診斷</h2>
+                                <h2 className="text-3xl font-black text-white italic">系統設定</h2>
                                 
                                 <div className="bg-white/5 p-6 rounded-[32px] border border-white/10 space-y-5">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">1. Google API Key</label>
-                                        <input 
-                                            type="password"
-                                            placeholder="AIzaSy..." 
-                                            className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white font-mono text-lg"
-                                            value={userKey}
-                                            onChange={(e) => setUserKey(e.target.value)}
-                                        />
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Google API Key</label>
+                                        <input type="password" placeholder="AIzaSy..." className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white font-mono text-lg"
+                                            value={userKey} onChange={(e) => setUserKey(e.target.value)} />
                                     </div>
-
-                                    <button onClick={fetchAvailableModels} className="w-full bg-emerald-500/20 text-emerald-400 font-black py-4 rounded-xl text-sm border border-emerald-500/30 active-scale flex items-center justify-center">
-                                        <i data-lucide="refresh-cw" className="w-4 h-4 mr-2"></i>
-                                        第一步：自動抓取可用模型清單
-                                    </button>
-
                                     <div className="space-y-2 pt-2 border-t border-white/5">
-                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">2. 請選擇模型 (若失敗請換另一個)</label>
-                                        <select 
-                                            className="w-full bg-black border border-indigo-500/50 p-5 rounded-2xl text-indigo-400 font-bold text-base outline-none appearance-none"
-                                            value={selectedModel}
-                                            onChange={(e) => setSelectedModel(e.target.value)}
-                                        >
-                                            {availableModels.map(model => (
-                                                <option key={model} value={model}>{model}</option>
-                                            ))}
+                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">選擇 AI 模型</label>
+                                        <select className="w-full bg-black border border-indigo-500/50 p-5 rounded-2xl text-indigo-400 font-bold text-base outline-none"
+                                            value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
+                                            <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                            <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash Latest</option>
+                                            <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                            <option value="gemini-pro-vision">Gemini Pro Vision</option>
                                         </select>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-between p-6 bg-amber-500/10 border border-amber-500/20 rounded-[32px]">
-                                    <div className="space-y-1">
-                                        <p className="font-black text-amber-500 text-lg uppercase italic tracking-tighter">演示模式 (Offline)</p>
-                                        <p className="text-[10px] font-bold text-amber-500/60 uppercase">無需金鑰，直接展示介面</p>
-                                    </div>
-                                    <input type="checkbox" className="w-8 h-8 rounded-lg accent-amber-500" checked={isDemoMode} onChange={() => setIsDemoMode(!isDemoMode)} />
-                                </div>
-
-                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-6 rounded-[32px] text-xl shadow-2xl active-scale">儲存並前往總覽</button>
+                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-6 rounded-[32px] text-xl shadow-2xl active-scale">儲存並返回</button>
                             </div>
                         )}
 
+                        {/* --- 報告面板 --- */}
                         {activeTab === 'report' && aiResult && (
                             <div className="space-y-8 animate-in slide-in-from-bottom-10 pb-20 text-white">
                                 <h2 className="text-3xl font-black text-indigo-500 italic border-b-2 border-indigo-500/30 pb-2 uppercase tracking-tighter">{aiResult.event_name}</h2>
@@ -245,12 +263,16 @@
                                     <h3 className="text-emerald-500 font-black text-xs uppercase tracking-widest px-2"><i data-lucide="box" className="inline w-4 h-4 mr-2"></i>RP 擺位清單</h3>
                                     {aiResult.rp_pillar.map((item, i) => (
                                         <div key={i} className="bg-gray-900/80 border-l-4 border-emerald-500 p-6 rounded-2xl space-y-1">
-                                            <p className="text-2xl font-black tracking-tight">{item.task}</p>
-                                            <p className="text-lg text-gray-400 font-medium italic leading-snug">{item.detail}</p>
+                                            <p className="text-2xl font-black tracking-tight text-emerald-400">{item.task}</p>
+                                            <p className="text-lg text-gray-300 font-medium italic leading-snug">{item.detail}</p>
                                         </div>
                                     ))}
                                 </section>
-                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-white/5 border border-white/10 text-gray-500 font-black py-6 rounded-[32px] text-xl uppercase italic">Close Report</button>
+                                <section className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[32px] shadow-inner">
+                                    <h3 className="text-rose-500 font-black text-xs uppercase tracking-widest mb-1"><i data-lucide="ban" className="inline w-4 h-4 mr-2"></i>封位席號</h3>
+                                    <p className="text-2xl font-mono text-white font-black italic tracking-tighter">{aiResult.tech_blocks}</p>
+                                </section>
+                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-white/5 border border-white/10 text-gray-500 font-black py-6 rounded-[32px] text-xl uppercase italic active-scale">Close Report</button>
                             </div>
                         )}
                     </main>
@@ -269,15 +291,15 @@
                         </div>
                         <button onClick={() => setActiveTab('report')} className={`flex-1 flex flex-col items-center ${activeTab === 'report' ? 'text-emerald-500' : 'text-gray-600'}`}>
                             <i data-lucide="clipboard-list" className="w-8 h-8 mb-1"></i>
-                            <span className="text-[10px] font-black uppercase">報告</span>
+                            <span className="text-[10px] font-black uppercase tracking-tighter">報告</span>
                         </button>
                     </nav>
 
                     {isProcessing && (
                         <div className="fixed inset-0 bg-black/98 z-[100] flex flex-col items-center justify-center p-12 text-center">
                             <div className="animate-spin-custom mb-10 text-indigo-500"><i data-lucide="refresh-cw" className="w-20 h-20"></i></div>
-                            <h3 className="text-4xl font-black italic tracking-widest text-white uppercase tracking-tighter">Syncing</h3>
-                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">{isDemoMode ? '演示同步中...' : `正在透過 [${selectedModel.replace('gemini-', '')}] 分析...`}</p>
+                            <h3 className="text-4xl font-black italic tracking-widest text-white uppercase tracking-tighter">Processing</h3>
+                            <p className="text-gray-400 text-xl mt-6 font-bold leading-relaxed">正在處理圖片與資料...</p>
                         </div>
                     )}
                 </div>
