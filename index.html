@@ -4,22 +4,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Balance Pro - v16 圖文智聯版</title>
+    <title>Venue Pro - v23 標籤自訂版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        body { background-color: #050505; color: white; -webkit-tap-highlight-color: transparent; font-family: system-ui, sans-serif; margin: 0; }
+        body { background-color: #f8fafc; color: #0f172a; -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; margin: 0; }
         .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-        .active-scale:active { transform: scale(0.94); transition: 0.1s; }
+        .active-scale:active { transform: scale(0.96); transition: 0.1s; }
         html, body, #root { height: 100%; overflow: hidden; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
         .animate-pop:active { animation: pop 0.2s ease-out; }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .animate-spin-custom { animation: spin 1s linear infinite; }
+        input[type="date"]::-webkit-calendar-picker-indicator { opacity: 0.6; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -28,61 +30,115 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        const VENUES_DATA = {
+        // --- 原廠預設標籤資料庫 ---
+        const DEFAULT_VENUES_DATA = {
             "演奏廳 (音樂廳)": {
                 capacity: "座位總數：1957", details: "堂座(1): 481 | 堂座(2): 563 | 樓座: 629 | 合唱席: 284",
-                tags: { vip: ["大堂 2R4C 接待處", "需專人引導至堂座", "合唱席 VIP 預留", "會後合照安排", "媒體登記處"], audience: ["嚴禁攝影及錄音", "遲到者樂章間進場", "派發場刊", "樓座指引"], rp: ["Foyer 放置 A3 指示牌", "拉起紅繩圍封", "準備檢票機 Scanner", "清場廣播"], tech: ["控制台 Console 預留", "輪椅區 Wheelchair", "3個合唱席", "5個合唱席", "堂座觀眾席控制台"] }
+                tags: { 
+                    reminders: ["Pre-Talk 演前講座 (需4位PTU提早)", "酒會 Reception (需6-8位PTU)", "演後座談 Post-Talk", "簽名會 (需拉線及人手)"],
+                    vip: ["大堂 2R4C 接待處", "需專人引導至堂座", "合唱席 VIP 預留", "會後合照安排", "媒體登記處"], 
+                    audience: ["嚴禁攝影及錄音", "遲到者樂章間進場", "派發場刊", "樓座指引"], 
+                    rp: ["Foyer 放置 A3 指示牌", "拉起紅繩圍封", "清場廣播"], 
+                    tech: ["3個合唱席", "5個合唱席", "堂座觀眾席控制台", "控制台 Console 預留", "輪椅區 Wheelchair"] 
+                }
             },
             "大劇院": {
                 capacity: "座位總數：1708", details: "堂座(1): 297 | 堂座(2): 491 | 樓座: 425 | 高席: 495",
-                tags: { vip: ["大堂 2R4C 接待處", "高席 VIP 預留", "需專人引導入座", "酒會區預備"], audience: ["嚴禁攝影及錄音", "遲到者第一幕後進場", "6歲以下恕不招待", "高席電梯指引"], rp: ["Podium 放置指示牌", "拉起紅繩圍封", "準備檢票機 Scanner", "對講機 Channel 2"], tech: ["CA 5-17 排", "BQ 13-15 排", "控制台 Console", "樂池 (Orchestra Pit) 封閉"] }
+                tags: { 
+                    reminders: ["Pre-Talk 演前藝人談 (需4位PTU提早)", "酒會 Reception (需6-8位PTU)", "演後座談 Post-Talk", "後台導賞 (需特別指引)"],
+                    vip: ["大堂 2R4C 接待處", "高席 VIP 預留", "需專人引導入座", "酒會區預備"], 
+                    audience: ["嚴禁攝影及錄音", "遲到者第一幕後進場", "6歲以下恕不招待", "高席電梯指引"], 
+                    rp: ["Podium 放置指示牌", "拉起紅繩圍封", "對講機 Channel 2"], 
+                    tech: ["CA 5-17 排", "BQ 13-15 排", "控制台 Console", "樂池 (Orchestra Pit) 封閉"] 
+                }
             },
             "小劇場 (劇場)": {
                 capacity: "彈性座位配置", details: "單向: 321 | 雙向: 382 | 叁向: 303 | 四向: 496",
-                tags: { vip: ["入口接待處", "前排 VIP 預留", "演出後交流會"], audience: ["自由入座", "嚴禁攝影", "開演後嚴禁進場"], rp: ["門外放置 A3 指示牌", "排隊動線指引", "準備檢票機"], tech: ["燈光/音響控制台", "舞台邊界圍封", "單向配置", "四向配置"] }
+                tags: { 
+                    reminders: ["演後座談 (2位PTU留守)", "演前分享 (需提早準備)", "演後工作坊"],
+                    vip: ["入口接待處", "前排 VIP 預留", "演出後交流會"], 
+                    audience: ["自由入座", "嚴禁攝影", "開演後嚴禁進場"], 
+                    rp: ["門外放置 A3 指示牌", "排隊動線指引"], 
+                    tech: ["單向配置", "四向配置", "舞台邊界圍封", "燈光/音響控制台"] 
+                }
             },
             "大堂 (Foyer)": {
                 capacity: "開放式空間", details: "無固定座位，適合典禮 / 記者招待會 / 酒會",
-                tags: { vip: ["主禮嘉賓接待處", "剪綵區預留", "酒水區", "媒體拍攝區"], audience: ["自由參觀", "人群管制", "排隊動線指引"], rp: ["放置多個 A3 指示牌", "紅繩圍封 VIP 區", "背景板佈置", "PA 系統測試"], tech: ["流動電源", "臨時燈光佈置"] }
+                tags: { 
+                    reminders: ["大型酒會 (需8位以上PTU)", "開幕儀式 (需人流管制)", "記者招待會"],
+                    vip: ["主禮嘉賓接待處", "剪綵區預留", "酒水區", "媒體拍攝區"], 
+                    audience: ["自由參觀", "人群管制", "排隊動線指引"], 
+                    rp: ["放置多個 A3 指示牌", "紅繩圍封 VIP 區", "背景板佈置", "PA 系統測試"], 
+                    tech: ["流動電源", "臨時燈光佈置"] 
+                }
             },
-            "小型展覽 E1": { capacity: "展覽空間 E1", details: "小型展覽 / 工作坊", tags: { vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
-            "小型展覽 E2": { capacity: "展覽空間 E2", details: "小型展覽 / 工作坊", tags: { vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
-            "小型展覽 E3": { capacity: "展覽空間 E3", details: "小型展覽 / 工作坊", tags: { vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
-            "小型展覽 E4": { capacity: "展覽空間 E4", details: "小型展覽 / 工作坊", tags: { vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } }
+            "小型展覽 E1": { capacity: "展覽空間 E1", details: "小型展覽 / 工作坊", tags: { reminders: ["工作坊助理 (需提早)", "展覽導賞"], vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
+            "小型展覽 E2": { capacity: "展覽空間 E2", details: "小型展覽 / 工作坊", tags: { reminders: ["工作坊助理 (需提早)", "展覽導賞"], vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
+            "小型展覽 E3": { capacity: "展覽空間 E3", details: "小型展覽 / 工作坊", tags: { reminders: ["工作坊助理 (需提早)", "展覽導賞"], vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } },
+            "小型展覽 E4": { capacity: "展覽空間 E4", details: "小型展覽 / 工作坊", tags: { reminders: ["工作坊助理 (需提早)", "展覽導賞"], vip: ["開幕儀式接待"], audience: ["人流管制", "禁止飲食"], rp: ["展板設置", "A4 展品說明", "海報架"], tech: ["電源供應", "獨立照明"] } }
         };
 
-        const VENUE_NAMES = Object.keys(VENUES_DATA);
+        const DEFAULT_TIMELINE_TAGS = [
+            "FOH 開放 (FOH Open)", "觀眾席開放 (House Open)", "節目開始 (Show Start)", 
+            "遲到者進場點 (Latecomer Point)", "中場休息 (Intermission)", "下半場開始 (Show Resume)", 
+            "節目結束 (Show End)", "演後座談 (Post-Talk)", "清場完畢 (Clear House)"
+        ];
+
+        const VENUE_NAMES = Object.keys(DEFAULT_VENUES_DATA);
+        const CATEGORY_NAMES = { reminders: "特別安排 (Staffing)", vip: "嘉賓接待 (VIP)", audience: "觀眾管理 (Audience)", rp: "RP 空間任務 (Logistics)", tech: "技術封位 (Tech Blocks)" };
+        
         const getTodayDate = () => new Date().toISOString().split('T')[0];
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [reportData, setReportData] = useState(null);
-            const [lightboxImage, setLightboxImage] = useState(null); // 全螢幕圖片預覽
+            const [lightboxImage, setLightboxImage] = useState(null); 
+            const [isProcessing, setIsProcessing] = useState(false);
             const fileInputRef = useRef(null);
             
-            // 本地歷史紀錄 (共用 v14 的 key 以保留您的舊資料)
+            // --- 狀態庫 ---
             const [records, setRecords] = useState(() => {
                 const saved = localStorage.getItem('balance_pro_records_v14');
                 return saved ? JSON.parse(saved) : [];
             });
+
+            // 標籤資料庫 (從 localStorage 讀取或使用預設)
+            const [venuesData, setVenuesData] = useState(() => {
+                const saved = localStorage.getItem('vp_custom_venues');
+                return saved ? JSON.parse(saved) : DEFAULT_VENUES_DATA;
+            });
+            const [timelineTags, setTimelineTags] = useState(() => {
+                const saved = localStorage.getItem('vp_custom_timeline');
+                return saved ? JSON.parse(saved) : DEFAULT_TIMELINE_TAGS;
+            });
             
-            // 表單狀態
+            // 新增表單
             const [form, setForm] = useState({
                 date: getTodayDate(), venue: VENUE_NAMES[0], event_name: "", 
-                vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: "",
-                reference_image: null // 儲存壓縮後的圖片 base64
+                reminders: "", vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: "", timeline: "",
+                reference_images: []
             });
 
+            // 標籤管理員狀態
+            const [tagManagerView, setTagManagerView] = useState('venue'); // 'venue' or 'timeline'
+            const [tmVenue, setTmVenue] = useState(VENUE_NAMES[0]);
+            const [tmCategory, setTmCategory] = useState('reminders');
+            const [newTagText, setNewTagText] = useState("");
+            const [editingTag, setEditingTag] = useState(null); // { index, text }
+
+            // 自動儲存
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
                 try {
                     localStorage.setItem('balance_pro_records_v14', JSON.stringify(records));
+                    localStorage.setItem('vp_custom_venues', JSON.stringify(venuesData));
+                    localStorage.setItem('vp_custom_timeline', JSON.stringify(timelineTags));
                 } catch (e) {
-                    alert("⚠️ 手機儲存空間已滿！請前往「過往紀錄」刪除一些帶有圖片的舊紀錄。");
+                    alert("⚠️ 手機儲存空間不足，請清理過往紀錄或相片。");
                 }
-            }, [activeTab, reportData, records, form.venue, lightboxImage]);
+            }, [activeTab, reportData, records, form.venue, form.reference_images, lightboxImage, venuesData, timelineTags]);
 
-            // --- 圖片壓縮引擎 (防止 LocalStorage 爆滿) ---
+            // --- 圖片壓縮引擎 ---
             const compressImage = (file) => {
                 return new Promise((resolve) => {
                     const reader = new FileReader();
@@ -92,66 +148,68 @@
                         img.src = e.target.result;
                         img.onload = () => {
                             const canvas = document.createElement('canvas');
-                            const MAX_WIDTH = 1024; // 限制最大寬度
-                            const MAX_HEIGHT = 1024;
-                            let width = img.width;
-                            let height = img.height;
-
-                            if (width > height) {
-                                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                            } else {
-                                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                            }
-                            canvas.width = width;
-                            canvas.height = height;
+                            const MAX_WIDTH = 800; const MAX_HEIGHT = 800;
+                            let width = img.width; let height = img.height;
+                            if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                            else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                            canvas.width = width; canvas.height = height;
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(img, 0, 0, width, height);
-                            // 壓縮成 JPG 格式，品質 0.6，極大減少體積
-                            resolve(canvas.toDataURL('image/jpeg', 0.6));
+                            resolve(canvas.toDataURL('image/jpeg', 0.5));
                         };
                     };
                 });
             };
 
             const handleImageUpload = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const compressedBase64 = await compressImage(file);
-                setForm(prev => ({ ...prev, reference_image: compressedBase64 }));
+                const files = Array.from(e.target.files);
+                if (!files.length) return;
+                const currentCount = form.reference_images.length;
+                if (currentCount + files.length > 10) {
+                    alert(`每個節目最多 10 張相片！您目前已選 ${currentCount} 張。`);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                    return;
+                }
+                setIsProcessing(true);
+                setTimeout(async () => {
+                    const newImages = [];
+                    for (let file of files) {
+                        const compressedBase64 = await compressImage(file);
+                        newImages.push(compressedBase64);
+                    }
+                    setForm(prev => ({ ...prev, reference_images: [...prev.reference_images, ...newImages] }));
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                    setIsProcessing(false);
+                }, 50);
             };
 
-            const removeImage = () => {
-                setForm(prev => ({ ...prev, reference_image: null }));
-                if (fileInputRef.current) fileInputRef.current.value = "";
-            };
+            const removeImageFromForm = (indexToRemove) => { setForm(prev => ({ ...prev, reference_images: prev.reference_images.filter((_, i) => i !== indexToRemove) })); };
 
             const appendTag = (field, text) => {
                 setForm(prev => {
                     const current = prev[field];
                     if (current.includes(text)) return prev;
                     if (field === 'tech_blocks') return { ...prev, [field]: current ? `${current}, ${text}` : text };
+                    if (field === 'timeline') return { ...prev, [field]: current ? `${current}\n[時間] - ${text}` : `[時間] - ${text}` };
                     return { ...prev, [field]: current ? `${current}\n- ${text}` : `- ${text}` };
                 });
             };
 
             const resetForm = () => {
-                setForm({ date: getTodayDate(), venue: VENUE_NAMES[0], event_name: "", vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: "", reference_image: null });
+                setForm({ date: getTodayDate(), venue: VENUE_NAMES[0], event_name: "", reminders: "", vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: "", timeline: "", reference_images: [] });
                 if (fileInputRef.current) fileInputRef.current.value = "";
             };
 
             const generateAndSaveReport = () => {
                 if (!form.event_name.trim()) { alert("請輸入「節目/活動名稱」！"); return; }
-                const rpArray = form.rp_tasks.split('\n').map(t => t.replace(/^- /, '').trim()).filter(t => t !== '').map((task, index) => ({ task: `任務 ${index + 1}`, detail: task }));
+                const rpArray = form.rp_tasks.split('\n').map(t => t.replace(/^- /, '').replace(/^任務\d+:/, '').trim()).filter(t => t !== '').map((task, index) => ({ task: `任務 ${index + 1}`, detail: task }));
 
                 const newReport = {
-                    id: Date.now().toString(),
-                    timestamp: new Date().getTime(),
+                    id: Date.now().toString(), timestamp: new Date().getTime(),
                     date: form.date, venue: form.venue, event_name: form.event_name,
-                    vip_pillar: form.vip_pillar || "無特別指示",
-                    audience_pillar: form.audience_pillar || "常規運作",
-                    rp_pillar: rpArray.length > 0 ? rpArray : [{task: "常規巡查", detail: "保持前台與大堂整潔及動線順暢"}],
-                    tech_blocks: form.tech_blocks || "無",
-                    reference_image: form.reference_image // 儲存壓縮圖
+                    reminders: form.reminders || "", vip_pillar: form.vip_pillar || "無特別指示",
+                    audience_pillar: form.audience_pillar || "常規運作", rp_pillar: rpArray.length > 0 ? rpArray : [{task: "常規巡查", detail: "保持前台與大堂整潔及動線順暢"}],
+                    tech_blocks: form.tech_blocks || "無", timeline: form.timeline || "", reference_images: form.reference_images
                 };
 
                 setRecords(prev => [newReport, ...prev]);
@@ -159,39 +217,143 @@
                 setActiveTab('report');
             };
 
-            const viewRecord = (record) => { setReportData(record); setActiveTab('report'); };
+            const viewRecord = (record) => { 
+                let displayRecord = { ...record };
+                if (!displayRecord.reference_images && displayRecord.reference_image) { displayRecord.reference_images = [displayRecord.reference_image]; } 
+                else if (!displayRecord.reference_images) { displayRecord.reference_images = []; }
+                setReportData(displayRecord); setActiveTab('report'); 
+            };
 
             const deleteRecord = (id, e) => {
                 e.stopPropagation();
-                if(confirm("確定要刪除這筆紀錄嗎？(包含附加圖表將一併刪除)")) {
+                if(confirm("確定要刪除這筆紀錄嗎？(包含相片將一併刪除)")) {
                     setRecords(prev => prev.filter(r => r.id !== id));
                     if (reportData && reportData.id === id) { setReportData(null); setActiveTab('history'); }
                 }
             };
 
+            const deleteImageFromSavedRecord = (recordId, imageIndex) => {
+                if(confirm("確定要從此紀錄中刪除這張相片嗎？")) {
+                    const updatedRecords = records.map(r => {
+                        if (r.id === recordId) {
+                            let imgs = r.reference_images || (r.reference_image ? [r.reference_image] : []);
+                            imgs = imgs.filter((_, i) => i !== imageIndex);
+                            return { ...r, reference_images: imgs, reference_image: null };
+                        }
+                        return r;
+                    });
+                    setRecords(updatedRecords);
+                    setReportData(prev => {
+                        let imgs = prev.reference_images || (prev.reference_image ? [prev.reference_image] : []);
+                        imgs = imgs.filter((_, i) => i !== imageIndex);
+                        return { ...prev, reference_images: imgs, reference_image: null };
+                    });
+                }
+            };
+
+            const clearAllData = () => {
+                if(confirm("警告：這將會刪除您手機內所有的過往紀錄與照片！確定要繼續嗎？")) {
+                    localStorage.removeItem('balance_pro_records_v14');
+                    setRecords([]); setReportData(null); setActiveTab('dashboard');
+                    alert("紀錄已完全清空！");
+                }
+            };
+
+            const copyReportText = () => {
+                if (!reportData) return;
+                let text = `📅 【FOH 運營報告】\n日期：${reportData.date}\n場地：${reportData.venue}\n節目：${reportData.event_name}\n\n`;
+                if (reportData.reminders) { text += `🔔 [人手與特別安排]\n${reportData.reminders}\n\n`; }
+                text += `🌟 [VIP 接待]\n${reportData.vip_pillar}\n\n`;
+                text += `👥 [觀眾管理]\n${reportData.audience_pillar}\n\n`;
+                text += `📦 [RP 空間任務]\n`;
+                reportData.rp_pillar.forEach(item => { text += `- ${item.detail}\n`; });
+                text += `\n🚫 [技術封位]\n${reportData.tech_blocks}\n\n`;
+                if (reportData.timeline) { text += `⏰ [運營時間線]\n${reportData.timeline}\n`; }
+
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try { document.execCommand('copy'); alert("✅ 報告文字已成功複製！"); } 
+                catch (err) { alert("❌ 複製失敗，請手動選取文字複製。"); }
+                document.body.removeChild(textArea);
+            };
+
+            // --- 標籤管理員 (Tag Manager) 邏輯 ---
+            const handleAddTag = () => {
+                if (!newTagText.trim()) return;
+                if (tagManagerView === 'timeline') {
+                    setTimelineTags([...timelineTags, newTagText.trim()]);
+                } else {
+                    const updated = { ...venuesData };
+                    updated[tmVenue].tags[tmCategory] = [...updated[tmVenue].tags[tmCategory], newTagText.trim()];
+                    setVenuesData(updated);
+                }
+                setNewTagText("");
+            };
+
+            const handleDeleteTag = (index) => {
+                if(!confirm("確定要刪除這個標籤嗎？")) return;
+                if (tagManagerView === 'timeline') {
+                    setTimelineTags(timelineTags.filter((_, i) => i !== index));
+                } else {
+                    const updated = { ...venuesData };
+                    updated[tmVenue].tags[tmCategory] = updated[tmVenue].tags[tmCategory].filter((_, i) => i !== index);
+                    setVenuesData(updated);
+                }
+            };
+
+            const handleSaveEditTag = () => {
+                if (!editingTag.text.trim()) return;
+                if (tagManagerView === 'timeline') {
+                    const updatedTags = [...timelineTags];
+                    updatedTags[editingTag.index] = editingTag.text.trim();
+                    setTimelineTags(updatedTags);
+                } else {
+                    const updated = { ...venuesData };
+                    updated[tmVenue].tags[tmCategory][editingTag.index] = editingTag.text.trim();
+                    setVenuesData(updated);
+                }
+                setEditingTag(null);
+            };
+
+            const resetTagsToDefault = () => {
+                if(confirm("警告：這會將所有標籤恢復為系統最初的原廠設定，您自訂的標籤將會遺失！確定要繼續嗎？")) {
+                    setVenuesData(DEFAULT_VENUES_DATA);
+                    setTimelineTags(DEFAULT_TIMELINE_TAGS);
+                    alert("標籤已恢復預設值！");
+                }
+            };
+
             return (
-                <div className="flex flex-col h-full overflow-hidden select-none bg-[#050505]">
+                <div className="flex flex-col h-full overflow-hidden select-none bg-slate-50 text-slate-900">
                     
-                    {/* --- 全螢幕圖片檢視器 (Lightbox) --- */}
                     {lightboxImage && (
                         <div className="fixed inset-0 bg-black/95 z-[200] flex flex-col items-center justify-center animate-in fade-in duration-200" onClick={() => setLightboxImage(null)}>
-                            <button className="absolute top-10 right-6 p-4 bg-white/10 rounded-full active-scale" onClick={() => setLightboxImage(null)}>
-                                <i data-lucide="x" className="w-8 h-8 text-white"></i>
-                            </button>
-                            <img src={lightboxImage} className="max-w-full max-h-[85vh] object-contain p-4" alt="Reference" />
-                            <p className="text-gray-500 text-sm absolute bottom-10"><i data-lucide="zoom-in" className="inline w-4 h-4 mr-1 mb-0.5"></i>雙指可放大查看</p>
+                            <button className="absolute top-10 right-6 p-4 bg-white/10 rounded-full active-scale" onClick={() => setLightboxImage(null)}><i data-lucide="x" className="w-8 h-8 text-white"></i></button>
+                            <img src={lightboxImage} className="max-w-full max-h-[85vh] object-contain p-4" />
+                            <p className="text-gray-400 text-sm absolute bottom-10 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md"><i data-lucide="zoom-in" className="inline w-4 h-4 mr-1 mb-0.5"></i>雙指可放大查看</p>
                         </div>
                     )}
 
-                    <header className="px-6 pt-12 pb-5 border-b border-white/5 bg-black/80 backdrop-blur-2xl flex justify-between items-center z-50">
+                    <header className="px-6 pt-12 pb-5 bg-white/90 backdrop-blur-xl border-b border-slate-200 flex justify-between items-center z-50 sticky top-0">
                         <div>
-                            <h1 className="text-2xl font-black italic tracking-tighter text-indigo-500 uppercase leading-none flex items-center">
-                                BALANCE PRO <span className="text-[10px] text-gray-500 ml-2 mt-1 not-italic tracking-widest">v16</span>
+                            <h1 className="text-2xl font-black italic tracking-tighter text-blue-600 uppercase leading-none flex items-center">
+                                VENUE PRO <span className="text-[10px] text-slate-400 ml-2 mt-1 not-italic tracking-widest">v23</span>
                             </h1>
-                            <p className="text-[10px] font-bold text-emerald-500 uppercase mt-1.5 tracking-widest flex items-center">
-                                <i data-lucide="image" className="w-3 h-3 mr-1"></i> 圖文智聯引擎
+                            <p className="text-[10px] font-bold text-teal-600 uppercase mt-1 tracking-widest flex items-center">
+                                <i data-lucide="edit-3" className="w-3 h-3 mr-1"></i> 標籤自訂版
                             </p>
                         </div>
+                        {activeTab === 'tagManager' ? (
+                            <button onClick={() => {setEditingTag(null); setActiveTab('settings');}} className="px-4 py-2 rounded-full bg-slate-100 text-slate-600 font-bold text-xs active-scale">
+                                完成設定
+                            </button>
+                        ) : (
+                            <button onClick={() => setActiveTab('settings')} className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-500 shadow-sm active-scale">
+                                <i data-lucide="settings" className="w-5 h-5"></i>
+                            </button>
+                        )}
                     </header>
 
                     <main className="flex-1 overflow-y-auto p-6 pb-40 no-scrollbar relative">
@@ -200,31 +362,31 @@
                         {activeTab === 'dashboard' && (
                             <div className="space-y-8 animate-in fade-in duration-300">
                                 <div className="flex justify-between items-end">
-                                    <h2 className="text-4xl font-black text-white leading-tight">運營總覽</h2>
+                                    <h2 className="text-4xl font-black text-slate-800 leading-tight">運營總覽</h2>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-gray-900/50 border border-amber-500/10 p-6 rounded-[32px] shadow-lg">
-                                        <p className="text-amber-500 text-[10px] font-bold uppercase tracking-widest mb-1">已存紀錄</p>
-                                        <p className="text-4xl font-black text-white italic">{records.length}</p>
+                                    <div className="bg-white border border-slate-200 p-6 rounded-[32px] shadow-sm">
+                                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">已存紀錄</p>
+                                        <p className="text-4xl font-black text-slate-800 italic">{records.length}</p>
                                     </div>
-                                    <div className="bg-gray-900/50 border border-indigo-500/10 p-6 rounded-[32px] shadow-lg active-scale" onClick={() => setActiveTab('history')}>
-                                        <p className="text-indigo-500 text-[10px] font-bold uppercase tracking-widest mb-1">過往紀錄</p>
+                                    <div className="bg-blue-50 border border-blue-100 p-6 rounded-[32px] shadow-sm active-scale" onClick={() => setActiveTab('history')}>
+                                        <p className="text-blue-600 text-[10px] font-bold uppercase tracking-widest mb-1">過往紀錄</p>
                                         <div className="flex items-center mt-2">
-                                            <i data-lucide="folder-open" className="w-8 h-8 text-white mr-2"></i>
-                                            <i data-lucide="arrow-right" className="w-4 h-4 text-indigo-400"></i>
+                                            <i data-lucide="folder-open" className="w-8 h-8 text-blue-500 mr-2"></i>
+                                            <i data-lucide="arrow-right" className="w-4 h-4 text-blue-400"></i>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="mt-8">
-                                    <button onClick={() => { resetForm(); setActiveTab('builder'); }} className="w-full bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-[40px] active-scale shadow-[0_10px_40px_rgba(79,70,229,0.4)] text-left relative overflow-hidden">
+                                    <button onClick={() => { resetForm(); setActiveTab('builder'); }} className="w-full bg-gradient-to-br from-blue-500 to-indigo-600 p-8 rounded-[40px] active-scale shadow-[0_10px_30px_rgba(59,130,246,0.3)] text-left relative overflow-hidden">
                                         <div className="relative z-10">
-                                            <h4 className="font-black text-white text-2xl flex items-center mb-2 italic">
-                                                <i data-lucide="zap" className="mr-3 w-8 h-8 text-amber-400"></i> 智選速記建檔
+                                            <h4 className="font-black text-white text-2xl flex items-center mb-2 italic tracking-tight">
+                                                <i data-lucide="zap" className="mr-3 w-8 h-8 text-amber-300"></i> 智選速記建檔
                                             </h4>
-                                            <p className="text-sm text-indigo-200 font-bold leading-relaxed pr-8">選擇場地，使用快捷標籤，並支援<b>匯入圖表相片</b>。</p>
+                                            <p className="text-sm text-blue-100 font-medium leading-relaxed pr-8">選擇場地，使用您自訂的專屬快捷標籤，10 秒內完成運營紀錄。</p>
                                         </div>
                                         <i data-lucide="chevron-right" className="absolute right-6 top-1/2 transform -translate-y-1/2 w-8 h-8 text-white/50 z-10"></i>
-                                        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
+                                        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/20 rounded-full blur-2xl"></div>
                                     </button>
                                 </div>
                             </div>
@@ -233,24 +395,26 @@
                         {/* ================= 歷史紀錄 ================= */}
                         {activeTab === 'history' && (
                             <div className="space-y-6 animate-in slide-in-from-right-10">
-                                <h2 className="text-3xl font-black text-white italic flex items-center"><i data-lucide="history" className="mr-3 w-8 h-8 text-indigo-500"></i>過往紀錄</h2>
+                                <h2 className="text-3xl font-black text-slate-800 italic flex items-center"><i data-lucide="history" className="mr-3 w-8 h-8 text-blue-600"></i>過往紀錄</h2>
                                 {records.length === 0 ? (
-                                    <div className="text-center py-20 text-gray-500">
-                                        <i data-lucide="inbox" className="w-16 h-16 mx-auto mb-4 opacity-50"></i><p className="font-bold">目前沒有任何紀錄</p>
+                                    <div className="text-center py-20 text-slate-400">
+                                        <i data-lucide="inbox" className="w-16 h-16 mx-auto mb-4 opacity-50 text-slate-300"></i><p className="font-bold">目前沒有任何紀錄</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-4 pb-20">
                                         {records.map(record => (
-                                            <div key={record.id} onClick={() => viewRecord(record)} className="bg-gray-900 border border-white/10 p-5 rounded-[28px] active-scale flex items-center justify-between shadow-lg">
+                                            <div key={record.id} onClick={() => viewRecord(record)} className="bg-white border border-slate-200 p-5 rounded-[28px] active-scale flex items-center justify-between shadow-sm">
                                                 <div className="flex-1 pr-4">
                                                     <div className="flex items-center space-x-2 mb-2">
-                                                        <span className="bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest">{record.date}</span>
-                                                        <span className="bg-white/10 text-gray-300 px-2 py-0.5 rounded-md text-[10px] font-bold truncate max-w-[100px]">{record.venue}</span>
-                                                        {record.reference_image && <i data-lucide="image" className="w-3 h-3 text-emerald-400"></i>}
+                                                        <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest border border-blue-100">{record.date}</span>
+                                                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md text-[10px] font-bold truncate max-w-[100px]">{record.venue}</span>
+                                                        {record.reminders && <i data-lucide="bell-ring" className="w-3 h-3 text-purple-500"></i>}
+                                                        {record.timeline && <i data-lucide="clock" className="w-3 h-3 text-cyan-500"></i>}
+                                                        {((record.reference_images && record.reference_images.length > 0) || record.reference_image) && <i data-lucide="images" className="w-3 h-3 text-teal-500"></i>}
                                                     </div>
-                                                    <h3 className="font-black text-white text-lg truncate tracking-tight">{record.event_name}</h3>
+                                                    <h3 className="font-black text-slate-800 text-lg truncate tracking-tight">{record.event_name}</h3>
                                                 </div>
-                                                <button onClick={(e) => deleteRecord(record.id, e)} className="p-3 bg-rose-500/10 rounded-xl text-rose-500 active-scale"><i data-lucide="trash-2" className="w-5 h-5"></i></button>
+                                                <button onClick={(e) => deleteRecord(record.id, e)} className="p-3 bg-rose-50 rounded-xl text-rose-500 active-scale border border-rose-100"><i data-lucide="trash-2" className="w-5 h-5"></i></button>
                                             </div>
                                         ))}
                                     </div>
@@ -258,68 +422,174 @@
                             </div>
                         )}
 
+                        {/* ================= 設定頁面 ================= */}
+                        {activeTab === 'settings' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-10">
+                                <h2 className="text-3xl font-black text-slate-800 italic flex items-center"><i data-lucide="settings" className="mr-3 w-8 h-8 text-slate-600"></i>系統設定</h2>
+                                
+                                {/* 標籤管理員入口 */}
+                                <div className="bg-blue-50 border border-blue-100 p-6 rounded-[28px] shadow-sm space-y-3">
+                                    <h3 className="font-black text-blue-800 flex items-center"><i data-lucide="edit-3" className="mr-2 w-5 h-5"></i>自訂快捷標籤 (Quick Tags)</h3>
+                                    <p className="text-sm text-blue-600/80 font-medium">您可以自由新增、刪除、或修改各場地的快捷標籤內容，打造您專屬的工作流。</p>
+                                    <button onClick={() => setActiveTab('tagManager')} className="w-full mt-2 bg-blue-600 text-white font-bold py-4 rounded-2xl text-sm uppercase active-scale shadow-md flex items-center justify-center">
+                                        <i data-lucide="settings-2" className="mr-2 w-4 h-4"></i> 進入標籤管理員
+                                    </button>
+                                </div>
+
+                                <div className="bg-white border border-slate-200 p-6 rounded-[28px] shadow-sm space-y-4">
+                                    <h3 className="font-black text-slate-700 flex items-center"><i data-lucide="database" className="mr-2 w-5 h-5 text-teal-500"></i>空間管理</h3>
+                                    <p className="text-sm text-slate-500 font-medium">每張上傳的照片都會自動壓縮。若手機提示空間不足，請在此清空舊紀錄。</p>
+                                    <div className="pt-4 border-t border-slate-100">
+                                        <button onClick={clearAllData} className="w-full bg-rose-50 text-rose-600 font-bold py-4 rounded-2xl text-sm uppercase active-scale border border-rose-100 flex items-center justify-center">
+                                            <i data-lucide="alert-triangle" className="mr-2 w-4 h-4"></i> 清空所有資料
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button onClick={() => setActiveTab('dashboard')} className="w-full bg-slate-800 text-white font-black py-5 rounded-[24px] text-lg uppercase active-scale shadow-md">
+                                    返回總覽
+                                </button>
+                            </div>
+                        )}
+
+                        {/* ================= 標籤管理員 (Tag Manager) ================= */}
+                        {activeTab === 'tagManager' && (
+                            <div className="space-y-6 animate-in slide-in-from-right-10 pb-20">
+                                <h2 className="text-2xl font-black text-slate-800 italic">標籤管理系統</h2>
+                                
+                                {/* 切換視圖 */}
+                                <div className="flex bg-slate-200 p-1 rounded-xl">
+                                    <button onClick={() => {setTagManagerView('venue'); setEditingTag(null);}} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${tagManagerView === 'venue' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}>場地專屬標籤</button>
+                                    <button onClick={() => {setTagManagerView('timeline'); setEditingTag(null);}} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${tagManagerView === 'timeline' ? 'bg-white shadow-sm text-cyan-600' : 'text-slate-500'}`}>時間線標籤</button>
+                                </div>
+
+                                {/* 場地標籤設定 */}
+                                {tagManagerView === 'venue' && (
+                                    <div className="space-y-4">
+                                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                                            {VENUE_NAMES.map(v => (
+                                                <button key={v} onClick={() => {setTmVenue(v); setEditingTag(null);}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold border ${tmVenue === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}>{v}</button>
+                                            ))}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {Object.entries(CATEGORY_NAMES).map(([key, name]) => (
+                                                <button key={key} onClick={() => {setTmCategory(key); setEditingTag(null);}} className={`p-3 rounded-xl text-xs font-bold text-left border ${tmCategory === key ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm' : 'bg-white text-slate-500 border-slate-200'}`}>
+                                                    {name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 標籤列表與編輯區 */}
+                                <div className="bg-white rounded-[28px] border border-slate-200 p-5 space-y-4 shadow-sm">
+                                    <h3 className="font-black text-slate-700 text-sm border-b border-slate-100 pb-2">
+                                        目前標籤 {tagManagerView === 'venue' ? `(${tmVenue} - ${CATEGORY_NAMES[tmCategory]})` : '(通用時間線)'}
+                                    </h3>
+                                    
+                                    <div className="space-y-3">
+                                        {(tagManagerView === 'timeline' ? timelineTags : venuesData[tmVenue].tags[tmCategory]).map((tag, idx) => (
+                                            <div key={idx} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                {editingTag && editingTag.index === idx ? (
+                                                    <div className="flex-1 flex items-center space-x-2">
+                                                        <input type="text" className="flex-1 bg-white border border-blue-300 p-2 rounded-lg text-sm font-bold outline-none" value={editingTag.text} onChange={(e) => setEditingTag({...editingTag, text: e.target.value})} autoFocus />
+                                                        <button onClick={handleSaveEditTag} className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><i data-lucide="check" className="w-4 h-4"></i></button>
+                                                        <button onClick={() => setEditingTag(null)} className="p-2 bg-slate-200 text-slate-600 rounded-lg"><i data-lucide="x" className="w-4 h-4"></i></button>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <span className="text-sm font-bold text-slate-700 flex-1">{tag}</span>
+                                                        <div className="flex space-x-1 ml-2">
+                                                            <button onClick={() => setEditingTag({index: idx, text: tag})} className="p-2 text-blue-500 bg-blue-50 rounded-lg active-scale"><i data-lucide="edit-2" className="w-4 h-4"></i></button>
+                                                            <button onClick={() => handleDeleteTag(idx)} className="p-2 text-rose-500 bg-rose-50 rounded-lg active-scale"><i data-lucide="trash" className="w-4 h-4"></i></button>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* 新增標籤輸入框 */}
+                                    {!editingTag && (
+                                        <div className="pt-4 border-t border-slate-100 flex items-center space-x-2">
+                                            <input type="text" placeholder="輸入新標籤..." className="flex-1 bg-slate-100 border-none p-3 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" value={newTagText} onChange={(e) => setNewTagText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddTag()} />
+                                            <button onClick={handleAddTag} className="bg-blue-600 text-white p-3 rounded-xl font-bold flex items-center active-scale"><i data-lucide="plus" className="w-4 h-4"></i></button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="pt-8">
+                                    <button onClick={resetTagsToDefault} className="w-full bg-transparent text-slate-400 font-bold py-4 text-xs uppercase active-scale underline">
+                                        恢復所有標籤至系統預設值
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* ================= 構建器 (新增紀錄) ================= */}
                         {activeTab === 'builder' && (
                             <div className="space-y-8 animate-in slide-in-from-right-10">
-                                <h2 className="text-3xl font-black text-white italic">新增節目紀錄</h2>
+                                <h2 className="text-3xl font-black text-slate-800 italic tracking-tight">新增運營紀錄</h2>
 
                                 <div className="space-y-8 pb-10">
-                                    <div className="bg-white/5 p-6 rounded-[32px] border border-white/5 space-y-6">
+                                    {/* 基礎資訊 */}
+                                    <div className="bg-white p-6 rounded-[32px] border border-slate-200 space-y-6 shadow-sm">
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center"><i data-lucide="calendar" className="mr-2 w-4 h-4 text-indigo-400"></i>節目日期</label>
-                                            <input type="date" className="w-full bg-black border border-white/10 p-4 rounded-2xl text-white font-bold text-lg outline-none" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="calendar" className="mr-2 w-4 h-4 text-blue-500"></i>節目日期</label>
+                                            <input type="date" className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-800 font-bold text-lg outline-none focus:border-blue-500 transition-all" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
                                         </div>
-
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center"><i data-lucide="map-pin" className="mr-2 w-4 h-4 text-rose-400"></i>表演場地 (左右滑動選擇)</label>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="map-pin" className="mr-2 w-4 h-4 text-rose-500"></i>表演場地 (左右滑動選擇)</label>
                                             <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
                                                 {VENUE_NAMES.map(v => (
-                                                    <button key={v} onClick={() => setForm({...form, venue: v})} className={`whitespace-nowrap px-4 py-3 rounded-2xl text-sm font-black transition-all border shrink-0 ${form.venue === v ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/30' : 'bg-black border-white/10 text-gray-400'}`}>{v}</button>
+                                                    <button key={v} onClick={() => setForm({...form, venue: v})} className={`whitespace-nowrap px-4 py-3 rounded-2xl text-sm font-black transition-all border shrink-0 ${form.venue === v ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{v}</button>
                                                 ))}
                                             </div>
-                                            <div className="bg-black/50 p-4 rounded-2xl border border-indigo-500/20 mt-2">
-                                                <p className="text-indigo-400 font-black text-sm mb-1">{VENUES_DATA[form.venue].capacity}</p>
-                                                <p className="text-gray-400 text-xs font-medium leading-relaxed">{VENUES_DATA[form.venue].details}</p>
+                                            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 mt-2">
+                                                <p className="text-blue-800 font-black text-sm mb-1">{venuesData[form.venue].capacity}</p>
+                                                <p className="text-blue-600/80 text-xs font-medium leading-relaxed">{venuesData[form.venue].details}</p>
                                             </div>
                                         </div>
-
                                         <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center"><i data-lucide="ticket" className="mr-2 w-4 h-4 text-amber-400"></i>節目/活動名稱 (必填)</label>
-                                            <input type="text" placeholder="輸入節目名稱..." className="w-full bg-black border border-white/10 p-5 rounded-2xl text-white font-black text-xl outline-none focus:border-indigo-500" value={form.event_name} onChange={e => setForm({...form, event_name: e.target.value})} />
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="ticket" className="mr-2 w-4 h-4 text-amber-500"></i>節目/活動名稱 (必填)</label>
+                                            <input type="text" placeholder="請輸入節目名稱..." className="w-full bg-slate-50 border border-slate-200 p-5 rounded-2xl text-slate-900 font-black text-xl outline-none focus:border-blue-500 transition-all" value={form.event_name} onChange={e => setForm({...form, event_name: e.target.value})} />
                                         </div>
                                     </div>
 
-                                    {/* --- 附加圖表功能 --- */}
-                                    <div className="space-y-3 bg-indigo-500/5 p-6 rounded-[32px] border border-indigo-500/20">
-                                        <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center mb-2"><i data-lucide="image" className="mr-2 w-4 h-4"></i>附加圖表 (Requirement / Floor Plan)</label>
-                                        <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                                        
-                                        {!form.reference_image ? (
-                                            <button onClick={() => fileInputRef.current.click()} className="w-full py-6 border-2 border-dashed border-indigo-500/30 rounded-2xl text-indigo-300 font-bold active-scale flex flex-col items-center justify-center bg-indigo-500/10">
-                                                <i data-lucide="upload-cloud" className="w-8 h-8 mb-2 text-indigo-400"></i>
-                                                <span>拍攝或選擇照片</span>
-                                                <span className="text-xs font-normal text-indigo-400/60 mt-1">方便經理核實與 RP 擺位參考</span>
-                                            </button>
-                                        ) : (
-                                            <div className="relative rounded-2xl overflow-hidden border border-white/20">
-                                                <img src={form.reference_image} alt="Preview" className="w-full max-h-48 object-cover bg-black" />
-                                                <button onClick={removeImage} className="absolute top-2 right-2 bg-black/70 p-2 rounded-full text-rose-400 backdrop-blur-md active-scale border border-white/10">
-                                                    <i data-lucide="trash-2" className="w-5 h-5"></i>
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
+                                    {/* 標籤輸入區 (現在抓取自訂的 venuesData) */}
+                                    <div className="space-y-3 bg-purple-50/50 p-6 rounded-[32px] border border-purple-200 shadow-sm"><label className="text-xs font-black text-purple-600 uppercase tracking-widest flex items-center"><i data-lucide="bell-ring" className="mr-2 w-4 h-4"></i>人手與特別安排 (Staffing)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.reminders.map(tag => (<button key={tag} onClick={() => appendTag('reminders', tag)} className="px-3 py-2 bg-purple-100 text-purple-700 text-xs font-bold rounded-xl border border-purple-200 active-scale animate-pop hover:bg-purple-200">+ {tag}</button>))}</div><textarea placeholder="點擊標籤，或手寫..." className="w-full bg-white border border-purple-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-purple-400" rows="2" value={form.reminders} onChange={e => setForm({...form, reminders: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-amber-600 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-4 h-4"></i>嘉賓接待 (VIP)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.vip.map(tag => (<button key={tag} onClick={() => appendTag('vip_pillar', tag)} className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold rounded-xl border border-amber-200 active-scale animate-pop hover:bg-amber-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-amber-400" rows="3" value={form.vip_pillar} onChange={e => setForm({...form, vip_pillar: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-blue-600 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-4 h-4"></i>觀眾管理 (Audience)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.audience.map(tag => (<button key={tag} onClick={() => appendTag('audience_pillar', tag)} className="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 active-scale animate-pop hover:bg-blue-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-blue-400" rows="3" value={form.audience_pillar} onChange={e => setForm({...form, audience_pillar: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-teal-600 uppercase tracking-widest flex items-center"><i data-lucide="box" className="mr-2 w-4 h-4"></i>RP 空間任務 (Logistics)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.rp.map(tag => (<button key={tag} onClick={() => appendTag('rp_tasks', tag)} className="px-3 py-2 bg-teal-50 text-teal-700 text-xs font-bold rounded-xl border border-teal-200 active-scale animate-pop hover:bg-teal-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-teal-400" rows="4" value={form.rp_tasks} onChange={e => setForm({...form, rp_tasks: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-rose-600 uppercase tracking-widest flex items-center"><i data-lucide="ban" className="mr-2 w-4 h-4"></i>技術封位 (Tech Blocks)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.tech.map(tag => (<button key={tag} onClick={() => appendTag('tech_blocks', tag)} className="px-3 py-2 bg-rose-50 text-rose-700 text-xs font-bold rounded-xl border border-rose-200 active-scale animate-pop hover:bg-rose-100">+ {tag}</button>))}</div><input type="text" placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-mono text-lg outline-none focus:border-rose-400" value={form.tech_blocks} onChange={e => setForm({...form, tech_blocks: e.target.value})} /></div>
+                                    
+                                    {/* 自訂時間線 */}
+                                    <div className="space-y-3 bg-cyan-50/50 p-6 rounded-[32px] border border-cyan-200 shadow-sm"><label className="text-xs font-black text-cyan-600 uppercase tracking-widest flex items-center"><i data-lucide="clock" className="mr-2 w-4 h-4"></i>運營時間線 (Timeline)</label><div className="flex flex-wrap gap-2 mb-2">{timelineTags.map(tag => (<button key={tag} onClick={() => appendTag('timeline', tag)} className="px-3 py-2 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-xl border border-cyan-200 active-scale animate-pop hover:bg-cyan-200">+ {tag}</button>))}</div><textarea placeholder="[時間] - 任務..." className="w-full bg-white border border-cyan-200 p-5 rounded-2xl text-slate-700 font-mono text-sm outline-none focus:border-cyan-400" rows="5" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})}></textarea></div>
 
-                                    <div className="space-y-3"><label className="text-xs font-black text-amber-500 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-4 h-4"></i>嘉賓接待 (VIP)</label><div className="flex flex-wrap gap-2 mb-2">{VENUES_DATA[form.venue].tags.vip.map(tag => (<button key={tag} onClick={() => appendTag('vip_pillar', tag)} className="px-3 py-2 bg-amber-500/10 text-amber-400 text-xs font-bold rounded-xl border border-amber-500/20 active-scale animate-pop">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-gray-900 border border-amber-500/20 p-5 rounded-2xl text-white font-medium outline-none" rows="3" value={form.vip_pillar} onChange={e => setForm({...form, vip_pillar: e.target.value})}></textarea></div>
-                                    <div className="space-y-3"><label className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-4 h-4"></i>觀眾管理 (Audience)</label><div className="flex flex-wrap gap-2 mb-2">{VENUES_DATA[form.venue].tags.audience.map(tag => (<button key={tag} onClick={() => appendTag('audience_pillar', tag)} className="px-3 py-2 bg-indigo-500/10 text-indigo-300 text-xs font-bold rounded-xl border border-indigo-500/20 active-scale animate-pop">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-gray-900 border border-indigo-500/20 p-5 rounded-2xl text-white font-medium outline-none" rows="3" value={form.audience_pillar} onChange={e => setForm({...form, audience_pillar: e.target.value})}></textarea></div>
-                                    <div className="space-y-3"><label className="text-xs font-black text-emerald-500 uppercase tracking-widest flex items-center"><i data-lucide="box" className="mr-2 w-4 h-4"></i>RP 空間任務 (Logistics)</label><div className="flex flex-wrap gap-2 mb-2">{VENUES_DATA[form.venue].tags.rp.map(tag => (<button key={tag} onClick={() => appendTag('rp_tasks', tag)} className="px-3 py-2 bg-emerald-500/10 text-emerald-400 text-xs font-bold rounded-xl border border-emerald-500/20 active-scale animate-pop">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-gray-900 border border-emerald-500/20 p-5 rounded-2xl text-white font-medium outline-none" rows="4" value={form.rp_tasks} onChange={e => setForm({...form, rp_tasks: e.target.value})}></textarea></div>
-                                    <div className="space-y-3"><label className="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center"><i data-lucide="ban" className="mr-2 w-4 h-4"></i>技術封位 (Tech Blocks)</label><div className="flex flex-wrap gap-2 mb-2">{VENUES_DATA[form.venue].tags.tech.map(tag => (<button key={tag} onClick={() => appendTag('tech_blocks', tag)} className="px-3 py-2 bg-rose-500/10 text-rose-400 text-xs font-bold rounded-xl border border-rose-500/20 active-scale animate-pop">+ {tag}</button>))}</div><input type="text" placeholder="..." className="w-full bg-gray-900 border border-rose-500/20 p-5 rounded-2xl text-white font-mono text-lg outline-none" value={form.tech_blocks} onChange={e => setForm({...form, tech_blocks: e.target.value})} /></div>
+                                    {/* 多圖相冊 */}
+                                    <div className="space-y-3 bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="images" className="mr-2 w-4 h-4 text-teal-500"></i>圖表相冊 ({form.reference_images.length}/10)</label>
+                                        </div>
+                                        <input type="file" multiple ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                                        <div className="grid grid-cols-2 gap-3 mt-3">
+                                            {form.reference_images.map((imgSrc, idx) => (
+                                                <div key={idx} className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm aspect-[4/3]">
+                                                    <img src={imgSrc} className="w-full h-full object-cover bg-slate-100" />
+                                                    <button onClick={() => removeImageFromForm(idx)} className="absolute top-2 right-2 bg-white/90 p-1.5 rounded-full text-rose-500 backdrop-blur-md active-scale shadow-sm border border-slate-200"><i data-lucide="trash-2" className="w-4 h-4"></i></button>
+                                                </div>
+                                            ))}
+                                            {form.reference_images.length < 10 && (
+                                                <button onClick={() => fileInputRef.current.click()} className="border-2 border-dashed border-slate-300 rounded-2xl text-slate-400 font-bold active-scale flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors aspect-[4/3]"><i data-lucide="plus" className="w-8 h-8 mb-1 text-slate-400"></i><span className="text-xs">拍攝或選擇</span></button>
+                                            )}
+                                        </div>
+                                    </div>
 
                                     <div className="pt-6 space-y-4">
-                                        <button onClick={generateAndSaveReport} className="w-full bg-emerald-600 text-white font-black py-6 rounded-[32px] text-xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] active-scale uppercase tracking-widest flex items-center justify-center">
-                                            <i data-lucide="save" className="mr-2 w-6 h-6"></i> 生成並儲存紀錄
+                                        <button onClick={generateAndSaveReport} className="w-full bg-teal-500 text-white font-black py-6 rounded-[32px] text-xl shadow-[0_8px_20px_rgba(20,184,166,0.3)] active-scale uppercase tracking-widest flex items-center justify-center">
+                                            <i data-lucide="save" className="mr-2 w-6 h-6"></i> 儲存運營報告
                                         </button>
-                                        <button onClick={() => setActiveTab('dashboard')} className="w-full bg-transparent text-gray-500 font-bold py-4 rounded-[32px] text-sm uppercase active-scale border border-white/5">取消</button>
+                                        <button onClick={() => setActiveTab('dashboard')} className="w-full bg-white border border-slate-200 text-slate-500 font-bold py-4 rounded-[32px] text-sm uppercase active-scale">取消</button>
                                     </div>
                                 </div>
                             </div>
@@ -327,61 +597,79 @@
 
                         {/* ================= 報告面板 ================= */}
                         {activeTab === 'report' && reportData && (
-                            <div className="space-y-8 animate-in slide-in-from-bottom-10 pb-20 text-white">
-                                <div className="border-b-4 border-indigo-500/30 pb-4">
+                            <div className="space-y-8 animate-in slide-in-from-bottom-10 pb-20">
+                                
+                                <button onClick={copyReportText} className="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl flex items-center justify-center active-scale shadow-md mb-2">
+                                    <i data-lucide="clipboard-copy" className="w-5 h-5 mr-2"></i> 一鍵複製文字報告
+                                </button>
+
+                                <div className="border-b-2 border-slate-200 pb-4">
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center space-x-2">
-                                            <span className="bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-indigo-500/30">{reportData.date}</span>
-                                            <span className="bg-white/10 text-white px-3 py-1 rounded-lg text-xs font-bold">{reportData.venue}</span>
+                                            <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-blue-100">{reportData.date}</span>
+                                            <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold">{reportData.venue}</span>
                                         </div>
                                     </div>
-                                    <h2 className="text-4xl font-black text-white italic uppercase tracking-tighter leading-tight mb-2">{reportData.event_name}</h2>
-                                    <p className="text-xs font-mono text-gray-400 bg-gray-900 p-2 rounded-lg border border-white/5 inline-block mb-4">{VENUES_DATA[reportData.venue]?.capacity}</p>
-                                    
-                                    {/* 原圖檢視按鈕 */}
-                                    {reportData.reference_image && (
-                                        <button onClick={() => setLightboxImage(reportData.reference_image)} className="w-full bg-indigo-600/20 border border-indigo-500/30 p-4 rounded-2xl flex items-center justify-between active-scale">
-                                            <div className="flex items-center">
-                                                <div className="w-10 h-10 rounded-lg overflow-hidden mr-3 border border-white/20"><img src={reportData.reference_image} className="w-full h-full object-cover" /></div>
-                                                <div className="text-left">
-                                                    <p className="text-sm font-bold text-indigo-300">查看附加圖表 / 原圖</p>
-                                                    <p className="text-[10px] text-indigo-400/70 uppercase font-black">Floor Plan & Requirement</p>
-                                                </div>
-                                            </div>
-                                            <i data-lucide="maximize-2" className="w-5 h-5 text-indigo-400"></i>
-                                        </button>
-                                    )}
+                                    <h2 className="text-4xl font-black text-blue-700 italic uppercase tracking-tighter leading-tight mb-2">{reportData.event_name}</h2>
+                                    <p className="text-xs font-mono text-slate-500 bg-slate-100 p-2 rounded-lg border border-slate-200 inline-block mb-4">{venuesData[reportData.venue]?.capacity}</p>
                                 </div>
                                 
-                                <section className="bg-amber-500/5 border border-amber-500/20 p-6 rounded-[40px] space-y-3"><h3 className="text-sm font-black text-amber-500 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-5 h-5 mb-0.5"></i>VIP 接待</h3><p className="text-xl font-bold leading-relaxed whitespace-pre-line text-gray-100">{reportData.vip_pillar}</p></section>
-                                <section className="bg-indigo-500/5 border border-indigo-500/20 p-6 rounded-[40px] space-y-3"><h3 className="text-sm font-black text-indigo-400 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-5 h-5 mb-0.5"></i>觀眾管理</h3><p className="text-xl font-bold leading-relaxed whitespace-pre-line text-gray-100">{reportData.audience_pillar}</p></section>
-                                <section className="space-y-4"><h3 className="text-emerald-500 font-black text-sm uppercase tracking-widest px-2 flex items-center"><i data-lucide="box" className="mr-2 w-5 h-5 mb-0.5"></i>RP 空間任務</h3>{reportData.rp_pillar.map((item, i) => (<div key={i} className="bg-gray-900/80 border-l-4 border-emerald-500 p-6 rounded-[28px] space-y-2"><p className="text-2xl font-black tracking-tight text-emerald-400">{item.task}</p><p className="text-lg text-gray-300 font-medium italic leading-relaxed whitespace-pre-line">{item.detail}</p></div>))}</section>
-                                <section className="bg-rose-500/10 border border-rose-500/20 p-6 rounded-[32px] shadow-inner"><h3 className="text-rose-500 font-black text-sm uppercase tracking-widest mb-2 flex items-center"><i data-lucide="ban" className="mr-2 w-5 h-5 mb-0.5"></i>技術封位</h3><p className="text-3xl font-mono text-white font-black italic tracking-tighter">{reportData.tech_blocks}</p></section>
+                                {reportData.reminders && (
+                                    <section className="bg-purple-50 border border-purple-200 p-6 rounded-[32px] shadow-sm relative overflow-hidden"><div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-bl-full"></div><h3 className="text-sm font-black text-purple-600 uppercase tracking-widest flex items-center mb-2 relative z-10"><i data-lucide="bell-ring" className="mr-2 w-5 h-5 mb-0.5 text-purple-500"></i>特別安排 & 人手 (Staffing)</h3><p className="text-lg font-bold leading-relaxed whitespace-pre-line text-purple-900 relative z-10">{reportData.reminders}</p></section>
+                                )}
+
+                                <section className="bg-amber-50 border border-amber-100 p-6 rounded-[32px] shadow-sm"><h3 className="text-sm font-black text-amber-600 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-5 h-5 mb-0.5 text-amber-500"></i>VIP 接待</h3><p className="text-lg font-bold leading-relaxed whitespace-pre-line text-slate-800">{reportData.vip_pillar}</p></section>
+                                <section className="bg-blue-50 border border-blue-100 p-6 rounded-[32px] shadow-sm"><h3 className="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-5 h-5 mb-0.5 text-blue-500"></i>觀眾管理</h3><p className="text-lg font-bold leading-relaxed whitespace-pre-line text-slate-800">{reportData.audience_pillar}</p></section>
+                                <section className="space-y-4"><h3 className="text-teal-600 font-black text-sm uppercase tracking-widest px-2 flex items-center"><i data-lucide="box" className="mr-2 w-5 h-5 mb-0.5 text-teal-500"></i>RP 空間任務</h3>{reportData.rp_pillar.map((item, i) => (<div key={i} className="bg-white border-l-4 border-teal-500 p-6 rounded-[24px] shadow-sm space-y-2"><p className="text-2xl font-black tracking-tight text-teal-600">{item.task}</p><p className="text-base text-slate-600 font-medium italic leading-relaxed whitespace-pre-line">{item.detail}</p></div>))}</section>
+                                <section className="bg-rose-50 border border-rose-100 p-6 rounded-[32px] shadow-sm"><h3 className="text-rose-600 font-black text-sm uppercase tracking-widest mb-2 flex items-center"><i data-lucide="ban" className="mr-2 w-5 h-5 mb-0.5 text-rose-500"></i>技術封位</h3><p className="text-3xl font-mono text-slate-800 font-black italic tracking-tighter">{reportData.tech_blocks}</p></section>
                                 
+                                {reportData.reference_images && reportData.reference_images.length > 0 && (
+                                    <div className="space-y-3 mt-6 border-t border-slate-200 pt-6">
+                                        <label className="text-[10px] font-black text-teal-600 uppercase tracking-widest flex items-center mb-2"><i data-lucide="images" className="mr-2 w-4 h-4"></i>附加圖表相冊 ({reportData.reference_images.length})</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {reportData.reference_images.map((imgSrc, idx) => (
+                                                <div key={idx} className="relative bg-white border border-slate-200 rounded-2xl flex flex-col active-scale shadow-sm overflow-hidden">
+                                                    <div onClick={() => setLightboxImage(imgSrc)} className="w-full aspect-[4/3] relative"><img src={imgSrc} className="w-full h-full object-cover" /><div className="absolute inset-0 flex items-center justify-center bg-black/10 opacity-0 hover:opacity-100 transition-opacity"><i data-lucide="zoom-in" className="w-6 h-6 text-white drop-shadow-md"></i></div></div>
+                                                    <div className="p-2 bg-slate-50 flex justify-end border-t border-slate-100"><button onClick={() => deleteImageFromSavedRecord(reportData.id, idx)} className="text-rose-500 bg-white p-1.5 rounded-lg border border-rose-100 shadow-sm"><i data-lucide="trash-2" className="w-4 h-4"></i></button></div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {reportData.timeline && (
+                                    <section className="bg-cyan-50 border border-cyan-200 p-6 rounded-[32px] shadow-sm mt-6 relative overflow-hidden"><div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-bl-full"></div><h3 className="text-sm font-black text-cyan-600 uppercase tracking-widest flex items-center mb-3 relative z-10"><i data-lucide="clock" className="mr-2 w-5 h-5 mb-0.5 text-cyan-500"></i>運營時間線 (Timeline)</h3><p className="text-lg font-mono leading-relaxed whitespace-pre-line text-slate-800 relative z-10 pl-3 border-l-4 border-cyan-400">{reportData.timeline}</p></section>
+                                )}
+
                                 <div className="grid grid-cols-2 gap-4 mt-8">
-                                    <button onClick={() => setActiveTab('history')} className="w-full bg-gray-800 text-white font-black py-5 rounded-[24px] text-sm uppercase active-scale border border-white/10">查看過往紀錄</button>
-                                    <button onClick={() => setActiveTab('dashboard')} className="w-full bg-indigo-600 text-white font-black py-5 rounded-[24px] text-sm uppercase active-scale shadow-lg">返回主頁</button>
+                                    <button onClick={() => setActiveTab('history')} className="w-full bg-white border border-slate-200 text-slate-600 font-black py-5 rounded-[24px] text-sm uppercase active-scale shadow-sm">查看過往紀錄</button>
+                                    <button onClick={() => setActiveTab('dashboard')} className="w-full bg-blue-600 text-white font-black py-5 rounded-[24px] text-sm uppercase active-scale shadow-md shadow-blue-500/20">返回主頁</button>
                                 </div>
                             </div>
                         )}
                     </main>
 
                     {/* 底部導航 */}
-                    <nav className="bg-black border-t border-white/5 px-6 pb-12 pt-4 flex items-center justify-between sticky bottom-0 z-50 safe-bottom">
-                        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'dashboard' ? 'text-white' : 'text-gray-600'}`}>
-                            <i data-lucide="layout-dashboard" className="w-7 h-7 mb-1.5"></i>
-                            <span className="text-[10px] font-black uppercase">總覽</span>
+                    <nav className="bg-white border-t border-slate-200 px-6 pb-12 pt-4 flex items-center justify-between sticky bottom-0 z-50 safe-bottom">
+                        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'dashboard' ? 'text-blue-600' : 'text-slate-400'}`}>
+                            <i data-lucide="layout-dashboard" className="w-7 h-7 mb-1.5"></i><span className="text-[10px] font-black uppercase">總覽</span>
                         </button>
                         <div className="relative -top-10">
-                            <button onClick={() => { resetForm(); setActiveTab('builder'); }} className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.5)] border-[6px] border-[#050505] active-scale">
+                            <button onClick={() => { resetForm(); setActiveTab('builder'); }} className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-[0_8px_25px_rgba(59,130,246,0.4)] border-4 border-white active-scale">
                                 <i data-lucide="plus" className="w-10 h-10 text-white"></i>
                             </button>
                         </div>
-                        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'history' ? 'text-white' : 'text-gray-600'}`}>
-                            <i data-lucide="history" className="w-7 h-7 mb-1.5"></i>
-                            <span className="text-[10px] font-black uppercase tracking-tighter">紀錄</span>
+                        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center p-2 transition-colors ${activeTab === 'history' ? 'text-blue-600' : 'text-slate-400'}`}>
+                            <i data-lucide="history" className="w-7 h-7 mb-1.5"></i><span className="text-[10px] font-black uppercase tracking-tighter">紀錄</span>
                         </button>
                     </nav>
+
+                    {isProcessing && (
+                        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-12 text-center animate-in fade-in duration-200">
+                            <div className="animate-spin-custom mb-6 text-blue-500"><i data-lucide="loader-2" className="w-16 h-16"></i></div>
+                            <p className="text-slate-600 font-bold tracking-widest uppercase">處理相片中...</p>
+                        </div>
+                    )}
                 </div>
             );
         };
