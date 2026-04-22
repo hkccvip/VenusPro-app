@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Venue Pro - v23 標籤自訂版</title>
+    <title>Venue Pro - v25 極致防崩潰版</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -89,6 +89,39 @@
         
         const getTodayDate = () => new Date().toISOString().split('T')[0];
 
+        // --- ★ 極致安全的資料初始化引擎 ★ ---
+        const getInitialVenues = () => {
+            const defaultData = JSON.parse(JSON.stringify(DEFAULT_VENUES_DATA));
+            try {
+                const saved = localStorage.getItem('vp_custom_venues');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // 深度合併：只覆蓋存在的陣列，確保格式永遠 100% 正確
+                    Object.keys(defaultData).forEach(venue => {
+                        if (parsed[venue] && parsed[venue].tags) {
+                            Object.keys(defaultData[venue].tags).forEach(category => {
+                                if (Array.isArray(parsed[venue].tags[category])) {
+                                    defaultData[venue].tags[category] = parsed[venue].tags[category];
+                                }
+                            });
+                        }
+                    });
+                }
+            } catch (e) { console.error("標籤讀取錯誤，已修復為預設值"); }
+            return defaultData;
+        };
+
+        const getInitialTimeline = () => {
+            try {
+                const saved = localStorage.getItem('vp_custom_timeline');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed)) return parsed;
+                }
+            } catch(e) {}
+            return [...DEFAULT_TIMELINE_TAGS];
+        };
+
         const App = () => {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [reportData, setReportData] = useState(null);
@@ -96,49 +129,42 @@
             const [isProcessing, setIsProcessing] = useState(false);
             const fileInputRef = useRef(null);
             
-            // --- 狀態庫 ---
+            // 歷史紀錄
             const [records, setRecords] = useState(() => {
-                const saved = localStorage.getItem('balance_pro_records_v14');
-                return saved ? JSON.parse(saved) : [];
+                try { return JSON.parse(localStorage.getItem('balance_pro_records_v14')) || []; } 
+                catch(e) { return []; }
             });
 
-            // 標籤資料庫 (從 localStorage 讀取或使用預設)
-            const [venuesData, setVenuesData] = useState(() => {
-                const saved = localStorage.getItem('vp_custom_venues');
-                return saved ? JSON.parse(saved) : DEFAULT_VENUES_DATA;
-            });
-            const [timelineTags, setTimelineTags] = useState(() => {
-                const saved = localStorage.getItem('vp_custom_timeline');
-                return saved ? JSON.parse(saved) : DEFAULT_TIMELINE_TAGS;
-            });
+            // 標籤資料庫 (使用安全引擎載入)
+            const [venuesData, setVenuesData] = useState(getInitialVenues);
+            const [timelineTags, setTimelineTags] = useState(getInitialTimeline);
             
-            // 新增表單
             const [form, setForm] = useState({
                 date: getTodayDate(), venue: VENUE_NAMES[0], event_name: "", 
                 reminders: "", vip_pillar: "", audience_pillar: "", rp_tasks: "", tech_blocks: "", timeline: "",
                 reference_images: []
             });
 
-            // 標籤管理員狀態
-            const [tagManagerView, setTagManagerView] = useState('venue'); // 'venue' or 'timeline'
+            // 管理員狀態
+            const [tagManagerView, setTagManagerView] = useState('venue'); 
             const [tmVenue, setTmVenue] = useState(VENUE_NAMES[0]);
             const [tmCategory, setTmCategory] = useState('reminders');
             const [newTagText, setNewTagText] = useState("");
-            const [editingTag, setEditingTag] = useState(null); // { index, text }
+            const [editingTag, setEditingTag] = useState(null); 
 
-            // 自動儲存
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
+            });
+
+            useEffect(() => {
                 try {
                     localStorage.setItem('balance_pro_records_v14', JSON.stringify(records));
                     localStorage.setItem('vp_custom_venues', JSON.stringify(venuesData));
                     localStorage.setItem('vp_custom_timeline', JSON.stringify(timelineTags));
-                } catch (e) {
-                    alert("⚠️ 手機儲存空間不足，請清理過往紀錄或相片。");
-                }
-            }, [activeTab, reportData, records, form.venue, form.reference_images, lightboxImage, venuesData, timelineTags]);
+                } catch (e) { /* 忽略空間錯誤 */ }
+            }, [records, venuesData, timelineTags]);
 
-            // --- 圖片壓縮引擎 ---
+            // --- 壓縮與表單邏輯 ---
             const compressImage = (file) => {
                 return new Promise((resolve) => {
                     const reader = new FileReader();
@@ -164,19 +190,15 @@
             const handleImageUpload = async (e) => {
                 const files = Array.from(e.target.files);
                 if (!files.length) return;
-                const currentCount = form.reference_images.length;
-                if (currentCount + files.length > 10) {
-                    alert(`每個節目最多 10 張相片！您目前已選 ${currentCount} 張。`);
+                if (form.reference_images.length + files.length > 10) {
+                    alert(`每個節目最多 10 張相片！`);
                     if (fileInputRef.current) fileInputRef.current.value = "";
                     return;
                 }
                 setIsProcessing(true);
                 setTimeout(async () => {
                     const newImages = [];
-                    for (let file of files) {
-                        const compressedBase64 = await compressImage(file);
-                        newImages.push(compressedBase64);
-                    }
+                    for (let file of files) { newImages.push(await compressImage(file)); }
                     setForm(prev => ({ ...prev, reference_images: [...prev.reference_images, ...newImages] }));
                     if (fileInputRef.current) fileInputRef.current.value = "";
                     setIsProcessing(false);
@@ -203,7 +225,6 @@
             const generateAndSaveReport = () => {
                 if (!form.event_name.trim()) { alert("請輸入「節目/活動名稱」！"); return; }
                 const rpArray = form.rp_tasks.split('\n').map(t => t.replace(/^- /, '').replace(/^任務\d+:/, '').trim()).filter(t => t !== '').map((task, index) => ({ task: `任務 ${index + 1}`, detail: task }));
-
                 const newReport = {
                     id: Date.now().toString(), timestamp: new Date().getTime(),
                     date: form.date, venue: form.venue, event_name: form.event_name,
@@ -211,7 +232,6 @@
                     audience_pillar: form.audience_pillar || "常規運作", rp_pillar: rpArray.length > 0 ? rpArray : [{task: "常規巡查", detail: "保持前台與大堂整潔及動線順暢"}],
                     tech_blocks: form.tech_blocks || "無", timeline: form.timeline || "", reference_images: form.reference_images
                 };
-
                 setRecords(prev => [newReport, ...prev]);
                 setReportData(newReport);
                 setActiveTab('report');
@@ -226,7 +246,7 @@
 
             const deleteRecord = (id, e) => {
                 e.stopPropagation();
-                if(confirm("確定要刪除這筆紀錄嗎？(包含相片將一併刪除)")) {
+                if(confirm("確定要刪除這筆紀錄嗎？")) {
                     setRecords(prev => prev.filter(r => r.id !== id));
                     if (reportData && reportData.id === id) { setReportData(null); setActiveTab('history'); }
                 }
@@ -248,14 +268,6 @@
                         imgs = imgs.filter((_, i) => i !== imageIndex);
                         return { ...prev, reference_images: imgs, reference_image: null };
                     });
-                }
-            };
-
-            const clearAllData = () => {
-                if(confirm("警告：這將會刪除您手機內所有的過往紀錄與照片！確定要繼續嗎？")) {
-                    localStorage.removeItem('balance_pro_records_v14');
-                    setRecords([]); setReportData(null); setActiveTab('dashboard');
-                    alert("紀錄已完全清空！");
                 }
             };
 
@@ -285,8 +297,8 @@
                 if (tagManagerView === 'timeline') {
                     setTimelineTags([...timelineTags, newTagText.trim()]);
                 } else {
-                    const updated = { ...venuesData };
-                    updated[tmVenue].tags[tmCategory] = [...updated[tmVenue].tags[tmCategory], newTagText.trim()];
+                    const updated = JSON.parse(JSON.stringify(venuesData));
+                    updated[tmVenue].tags[tmCategory].push(newTagText.trim());
                     setVenuesData(updated);
                 }
                 setNewTagText("");
@@ -297,7 +309,7 @@
                 if (tagManagerView === 'timeline') {
                     setTimelineTags(timelineTags.filter((_, i) => i !== index));
                 } else {
-                    const updated = { ...venuesData };
+                    const updated = JSON.parse(JSON.stringify(venuesData));
                     updated[tmVenue].tags[tmCategory] = updated[tmVenue].tags[tmCategory].filter((_, i) => i !== index);
                     setVenuesData(updated);
                 }
@@ -310,7 +322,7 @@
                     updatedTags[editingTag.index] = editingTag.text.trim();
                     setTimelineTags(updatedTags);
                 } else {
-                    const updated = { ...venuesData };
+                    const updated = JSON.parse(JSON.stringify(venuesData));
                     updated[tmVenue].tags[tmCategory][editingTag.index] = editingTag.text.trim();
                     setVenuesData(updated);
                 }
@@ -318,19 +330,30 @@
             };
 
             const resetTagsToDefault = () => {
-                if(confirm("警告：這會將所有標籤恢復為系統最初的原廠設定，您自訂的標籤將會遺失！確定要繼續嗎？")) {
-                    setVenuesData(DEFAULT_VENUES_DATA);
-                    setTimelineTags(DEFAULT_TIMELINE_TAGS);
-                    alert("標籤已恢復預設值！");
+                if(confirm("警告：這會將所有標籤恢復為系統最初的原廠設定！確定要繼續嗎？")) {
+                    setVenuesData(JSON.parse(JSON.stringify(DEFAULT_VENUES_DATA)));
+                    setTimelineTags([...DEFAULT_TIMELINE_TAGS]);
+                    alert("標籤已成功恢復為系統預設值！");
                 }
             };
+
+            const forceHardReset = () => {
+                if(confirm("【終極警告】\n此操作將會徹底刪除手機內所有的「過往紀錄、圖片、自訂標籤」。\n僅在系統嚴重錯誤時使用！確定要執行嗎？")) {
+                    localStorage.clear();
+                    window.location.reload();
+                }
+            };
+
+            const currentTagsToDisplay = tagManagerView === 'timeline' 
+                ? (Array.isArray(timelineTags) ? timelineTags : []) 
+                : (Array.isArray(venuesData?.[tmVenue]?.tags?.[tmCategory]) ? venuesData[tmVenue].tags[tmCategory] : []);
 
             return (
                 <div className="flex flex-col h-full overflow-hidden select-none bg-slate-50 text-slate-900">
                     
                     {lightboxImage && (
                         <div className="fixed inset-0 bg-black/95 z-[200] flex flex-col items-center justify-center animate-in fade-in duration-200" onClick={() => setLightboxImage(null)}>
-                            <button className="absolute top-10 right-6 p-4 bg-white/10 rounded-full active-scale" onClick={() => setLightboxImage(null)}><i data-lucide="x" className="w-8 h-8 text-white"></i></button>
+                            <button className="absolute top-10 right-6 p-4 bg-white/10 rounded-full active-scale"><i data-lucide="x" className="w-8 h-8 text-white"></i></button>
                             <img src={lightboxImage} className="max-w-full max-h-[85vh] object-contain p-4" />
                             <p className="text-gray-400 text-sm absolute bottom-10 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md"><i data-lucide="zoom-in" className="inline w-4 h-4 mr-1 mb-0.5"></i>雙指可放大查看</p>
                         </div>
@@ -339,16 +362,14 @@
                     <header className="px-6 pt-12 pb-5 bg-white/90 backdrop-blur-xl border-b border-slate-200 flex justify-between items-center z-50 sticky top-0">
                         <div>
                             <h1 className="text-2xl font-black italic tracking-tighter text-blue-600 uppercase leading-none flex items-center">
-                                VENUE PRO <span className="text-[10px] text-slate-400 ml-2 mt-1 not-italic tracking-widest">v23</span>
+                                VENUE PRO <span className="text-[10px] text-slate-400 ml-2 mt-1 not-italic tracking-widest">v25</span>
                             </h1>
                             <p className="text-[10px] font-bold text-teal-600 uppercase mt-1 tracking-widest flex items-center">
-                                <i data-lucide="edit-3" className="w-3 h-3 mr-1"></i> 標籤自訂版
+                                <i data-lucide="shield-check" className="w-3 h-3 mr-1"></i> 極致防崩潰版
                             </p>
                         </div>
                         {activeTab === 'tagManager' ? (
-                            <button onClick={() => {setEditingTag(null); setActiveTab('settings');}} className="px-4 py-2 rounded-full bg-slate-100 text-slate-600 font-bold text-xs active-scale">
-                                完成設定
-                            </button>
+                            <button onClick={() => {setEditingTag(null); setActiveTab('settings');}} className="px-4 py-2 rounded-full bg-slate-100 text-slate-600 font-bold text-xs active-scale shadow-sm">完成設定</button>
                         ) : (
                             <button onClick={() => setActiveTab('settings')} className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-500 shadow-sm active-scale">
                                 <i data-lucide="settings" className="w-5 h-5"></i>
@@ -432,16 +453,19 @@
                                     <h3 className="font-black text-blue-800 flex items-center"><i data-lucide="edit-3" className="mr-2 w-5 h-5"></i>自訂快捷標籤 (Quick Tags)</h3>
                                     <p className="text-sm text-blue-600/80 font-medium">您可以自由新增、刪除、或修改各場地的快捷標籤內容，打造您專屬的工作流。</p>
                                     <button onClick={() => setActiveTab('tagManager')} className="w-full mt-2 bg-blue-600 text-white font-bold py-4 rounded-2xl text-sm uppercase active-scale shadow-md flex items-center justify-center">
-                                        <i data-lucide="settings-2" className="mr-2 w-4 h-4"></i> 進入標籤管理員
+                                        進入標籤管理員
+                                    </button>
+                                    <button onClick={resetTagsToDefault} className="w-full bg-white text-slate-500 font-bold py-3 rounded-xl text-xs active-scale border border-blue-200 mt-2">
+                                        強制恢復系統預設標籤
                                     </button>
                                 </div>
 
-                                <div className="bg-white border border-slate-200 p-6 rounded-[28px] shadow-sm space-y-4">
-                                    <h3 className="font-black text-slate-700 flex items-center"><i data-lucide="database" className="mr-2 w-5 h-5 text-teal-500"></i>空間管理</h3>
-                                    <p className="text-sm text-slate-500 font-medium">每張上傳的照片都會自動壓縮。若手機提示空間不足，請在此清空舊紀錄。</p>
-                                    <div className="pt-4 border-t border-slate-100">
-                                        <button onClick={clearAllData} className="w-full bg-rose-50 text-rose-600 font-bold py-4 rounded-2xl text-sm uppercase active-scale border border-rose-100 flex items-center justify-center">
-                                            <i data-lucide="alert-triangle" className="mr-2 w-4 h-4"></i> 清空所有資料
+                                <div className="bg-rose-50 border border-rose-100 p-6 rounded-[28px] shadow-sm space-y-4">
+                                    <h3 className="font-black text-rose-700 flex items-center"><i data-lucide="alert-triangle" className="mr-2 w-5 h-5 text-rose-500"></i>系統急救 (重置)</h3>
+                                    <p className="text-sm text-rose-600/80 font-medium">若系統發生嚴重錯誤或容量全滿，請點擊下方按鈕將整個系統恢復至剛安裝的狀態 (所有資料將會消失)。</p>
+                                    <div className="pt-4 border-t border-rose-200">
+                                        <button onClick={forceHardReset} className="w-full bg-rose-500 text-white font-bold py-4 rounded-2xl text-sm uppercase active-scale shadow-sm flex items-center justify-center">
+                                            一鍵強制重置系統
                                         </button>
                                     </div>
                                 </div>
@@ -468,12 +492,12 @@
                                     <div className="space-y-4">
                                         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                                             {VENUE_NAMES.map(v => (
-                                                <button key={v} onClick={() => {setTmVenue(v); setEditingTag(null);}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold border ${tmVenue === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}>{v}</button>
+                                                <button key={v} onClick={() => {setTmVenue(v); setEditingTag(null);}} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${tmVenue === v ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200'}`}>{v}</button>
                                             ))}
                                         </div>
                                         <div className="grid grid-cols-2 gap-2">
                                             {Object.entries(CATEGORY_NAMES).map(([key, name]) => (
-                                                <button key={key} onClick={() => {setTmCategory(key); setEditingTag(null);}} className={`p-3 rounded-xl text-xs font-bold text-left border ${tmCategory === key ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm' : 'bg-white text-slate-500 border-slate-200'}`}>
+                                                <button key={key} onClick={() => {setTmCategory(key); setEditingTag(null);}} className={`p-3 rounded-xl text-xs font-bold text-left border transition-colors ${tmCategory === key ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm' : 'bg-white text-slate-500 border-slate-200'}`}>
                                                     {name}
                                                 </button>
                                             ))}
@@ -488,20 +512,29 @@
                                     </h3>
                                     
                                     <div className="space-y-3">
-                                        {(tagManagerView === 'timeline' ? timelineTags : venuesData[tmVenue].tags[tmCategory]).map((tag, idx) => (
+                                        {/* 使用純原生 SVG 避免 React DOM 崩潰 */}
+                                        {currentTagsToDisplay.map((tag, idx) => (
                                             <div key={idx} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
                                                 {editingTag && editingTag.index === idx ? (
                                                     <div className="flex-1 flex items-center space-x-2">
-                                                        <input type="text" className="flex-1 bg-white border border-blue-300 p-2 rounded-lg text-sm font-bold outline-none" value={editingTag.text} onChange={(e) => setEditingTag({...editingTag, text: e.target.value})} autoFocus />
-                                                        <button onClick={handleSaveEditTag} className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><i data-lucide="check" className="w-4 h-4"></i></button>
-                                                        <button onClick={() => setEditingTag(null)} className="p-2 bg-slate-200 text-slate-600 rounded-lg"><i data-lucide="x" className="w-4 h-4"></i></button>
+                                                        <input type="text" className="flex-1 bg-white border border-blue-300 p-2 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" value={editingTag.text} onChange={(e) => setEditingTag({...editingTag, text: e.target.value})} autoFocus />
+                                                        <button onClick={handleSaveEditTag} className="p-2 bg-emerald-100 text-emerald-600 rounded-lg active-scale">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                                        </button>
+                                                        <button onClick={() => setEditingTag(null)} className="p-2 bg-slate-200 text-slate-600 rounded-lg active-scale">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                                        </button>
                                                     </div>
                                                 ) : (
                                                     <>
                                                         <span className="text-sm font-bold text-slate-700 flex-1">{tag}</span>
                                                         <div className="flex space-x-1 ml-2">
-                                                            <button onClick={() => setEditingTag({index: idx, text: tag})} className="p-2 text-blue-500 bg-blue-50 rounded-lg active-scale"><i data-lucide="edit-2" className="w-4 h-4"></i></button>
-                                                            <button onClick={() => handleDeleteTag(idx)} className="p-2 text-rose-500 bg-rose-50 rounded-lg active-scale"><i data-lucide="trash" className="w-4 h-4"></i></button>
+                                                            <button onClick={() => setEditingTag({index: idx, text: tag})} className="p-2 text-blue-500 bg-blue-50 rounded-lg active-scale border border-blue-100">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                                            </button>
+                                                            <button onClick={() => handleDeleteTag(idx)} className="p-2 text-rose-500 bg-rose-50 rounded-lg active-scale border border-rose-100">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                            </button>
                                                         </div>
                                                     </>
                                                 )}
@@ -509,19 +542,14 @@
                                         ))}
                                     </div>
 
-                                    {/* 新增標籤輸入框 */}
                                     {!editingTag && (
                                         <div className="pt-4 border-t border-slate-100 flex items-center space-x-2">
                                             <input type="text" placeholder="輸入新標籤..." className="flex-1 bg-slate-100 border-none p-3 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" value={newTagText} onChange={(e) => setNewTagText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddTag()} />
-                                            <button onClick={handleAddTag} className="bg-blue-600 text-white p-3 rounded-xl font-bold flex items-center active-scale"><i data-lucide="plus" className="w-4 h-4"></i></button>
+                                            <button onClick={handleAddTag} className="bg-blue-600 text-white p-3 rounded-xl font-bold flex items-center active-scale shadow-sm">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                                            </button>
                                         </div>
                                     )}
-                                </div>
-
-                                <div className="pt-8">
-                                    <button onClick={resetTagsToDefault} className="w-full bg-transparent text-slate-400 font-bold py-4 text-xs uppercase active-scale underline">
-                                        恢復所有標籤至系統預設值
-                                    </button>
                                 </div>
                             </div>
                         )}
@@ -532,41 +560,21 @@
                                 <h2 className="text-3xl font-black text-slate-800 italic tracking-tight">新增運營紀錄</h2>
 
                                 <div className="space-y-8 pb-10">
-                                    {/* 基礎資訊 */}
                                     <div className="bg-white p-6 rounded-[32px] border border-slate-200 space-y-6 shadow-sm">
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="calendar" className="mr-2 w-4 h-4 text-blue-500"></i>節目日期</label>
-                                            <input type="date" className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-800 font-bold text-lg outline-none focus:border-blue-500 transition-all" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
-                                        </div>
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="map-pin" className="mr-2 w-4 h-4 text-rose-500"></i>表演場地 (左右滑動選擇)</label>
-                                            <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
-                                                {VENUE_NAMES.map(v => (
-                                                    <button key={v} onClick={() => setForm({...form, venue: v})} className={`whitespace-nowrap px-4 py-3 rounded-2xl text-sm font-black transition-all border shrink-0 ${form.venue === v ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{v}</button>
-                                                ))}
-                                            </div>
-                                            <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 mt-2">
-                                                <p className="text-blue-800 font-black text-sm mb-1">{venuesData[form.venue].capacity}</p>
-                                                <p className="text-blue-600/80 text-xs font-medium leading-relaxed">{venuesData[form.venue].details}</p>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="ticket" className="mr-2 w-4 h-4 text-amber-500"></i>節目/活動名稱 (必填)</label>
-                                            <input type="text" placeholder="請輸入節目名稱..." className="w-full bg-slate-50 border border-slate-200 p-5 rounded-2xl text-slate-900 font-black text-xl outline-none focus:border-blue-500 transition-all" value={form.event_name} onChange={e => setForm({...form, event_name: e.target.value})} />
-                                        </div>
+                                        <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="calendar" className="mr-2 w-4 h-4 text-blue-500"></i>節目日期</label><input type="date" className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl text-slate-800 font-bold text-lg outline-none focus:border-blue-500 transition-all" value={form.date} onChange={e => setForm({...form, date: e.target.value})} /></div>
+                                        <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="map-pin" className="mr-2 w-4 h-4 text-rose-500"></i>表演場地 (左右滑動選擇)</label><div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">{VENUE_NAMES.map(v => (<button key={v} onClick={() => setForm({...form, venue: v})} className={`whitespace-nowrap px-4 py-3 rounded-2xl text-sm font-black transition-all border shrink-0 ${form.venue === v ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{v}</button>))}</div><div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 mt-2"><p className="text-blue-800 font-black text-sm mb-1">{venuesData[form.venue]?.capacity || ""}</p><p className="text-blue-600/80 text-xs font-medium leading-relaxed">{venuesData[form.venue]?.details || ""}</p></div></div>
+                                        <div className="space-y-3"><label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="ticket" className="mr-2 w-4 h-4 text-amber-500"></i>節目/活動名稱 (必填)</label><input type="text" placeholder="請輸入節目名稱..." className="w-full bg-slate-50 border border-slate-200 p-5 rounded-2xl text-slate-900 font-black text-xl outline-none focus:border-blue-500 transition-all" value={form.event_name} onChange={e => setForm({...form, event_name: e.target.value})} /></div>
                                     </div>
 
-                                    {/* 標籤輸入區 (現在抓取自訂的 venuesData) */}
-                                    <div className="space-y-3 bg-purple-50/50 p-6 rounded-[32px] border border-purple-200 shadow-sm"><label className="text-xs font-black text-purple-600 uppercase tracking-widest flex items-center"><i data-lucide="bell-ring" className="mr-2 w-4 h-4"></i>人手與特別安排 (Staffing)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.reminders.map(tag => (<button key={tag} onClick={() => appendTag('reminders', tag)} className="px-3 py-2 bg-purple-100 text-purple-700 text-xs font-bold rounded-xl border border-purple-200 active-scale animate-pop hover:bg-purple-200">+ {tag}</button>))}</div><textarea placeholder="點擊標籤，或手寫..." className="w-full bg-white border border-purple-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-purple-400" rows="2" value={form.reminders} onChange={e => setForm({...form, reminders: e.target.value})}></textarea></div>
-                                    <div className="space-y-3"><label className="text-xs font-black text-amber-600 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-4 h-4"></i>嘉賓接待 (VIP)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.vip.map(tag => (<button key={tag} onClick={() => appendTag('vip_pillar', tag)} className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold rounded-xl border border-amber-200 active-scale animate-pop hover:bg-amber-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-amber-400" rows="3" value={form.vip_pillar} onChange={e => setForm({...form, vip_pillar: e.target.value})}></textarea></div>
-                                    <div className="space-y-3"><label className="text-xs font-black text-blue-600 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-4 h-4"></i>觀眾管理 (Audience)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.audience.map(tag => (<button key={tag} onClick={() => appendTag('audience_pillar', tag)} className="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 active-scale animate-pop hover:bg-blue-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-blue-400" rows="3" value={form.audience_pillar} onChange={e => setForm({...form, audience_pillar: e.target.value})}></textarea></div>
-                                    <div className="space-y-3"><label className="text-xs font-black text-teal-600 uppercase tracking-widest flex items-center"><i data-lucide="box" className="mr-2 w-4 h-4"></i>RP 空間任務 (Logistics)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.rp.map(tag => (<button key={tag} onClick={() => appendTag('rp_tasks', tag)} className="px-3 py-2 bg-teal-50 text-teal-700 text-xs font-bold rounded-xl border border-teal-200 active-scale animate-pop hover:bg-teal-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-teal-400" rows="4" value={form.rp_tasks} onChange={e => setForm({...form, rp_tasks: e.target.value})}></textarea></div>
-                                    <div className="space-y-3"><label className="text-xs font-black text-rose-600 uppercase tracking-widest flex items-center"><i data-lucide="ban" className="mr-2 w-4 h-4"></i>技術封位 (Tech Blocks)</label><div className="flex flex-wrap gap-2 mb-2">{venuesData[form.venue].tags.tech.map(tag => (<button key={tag} onClick={() => appendTag('tech_blocks', tag)} className="px-3 py-2 bg-rose-50 text-rose-700 text-xs font-bold rounded-xl border border-rose-200 active-scale animate-pop hover:bg-rose-100">+ {tag}</button>))}</div><input type="text" placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-mono text-lg outline-none focus:border-rose-400" value={form.tech_blocks} onChange={e => setForm({...form, tech_blocks: e.target.value})} /></div>
-                                    
-                                    {/* 自訂時間線 */}
-                                    <div className="space-y-3 bg-cyan-50/50 p-6 rounded-[32px] border border-cyan-200 shadow-sm"><label className="text-xs font-black text-cyan-600 uppercase tracking-widest flex items-center"><i data-lucide="clock" className="mr-2 w-4 h-4"></i>運營時間線 (Timeline)</label><div className="flex flex-wrap gap-2 mb-2">{timelineTags.map(tag => (<button key={tag} onClick={() => appendTag('timeline', tag)} className="px-3 py-2 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-xl border border-cyan-200 active-scale animate-pop hover:bg-cyan-200">+ {tag}</button>))}</div><textarea placeholder="[時間] - 任務..." className="w-full bg-white border border-cyan-200 p-5 rounded-2xl text-slate-700 font-mono text-sm outline-none focus:border-cyan-400" rows="5" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})}></textarea></div>
+                                    {/* 動態標籤區塊 */}
+                                    <div className="space-y-3 bg-purple-50/50 p-6 rounded-[32px] border border-purple-200 shadow-sm"><label className="text-xs font-black text-purple-600 uppercase tracking-widest flex items-center"><i data-lucide="bell-ring" className="mr-2 w-4 h-4"></i>人手與特別安排 (Staffing)</label><div className="flex flex-wrap gap-2 mb-2">{(venuesData[form.venue]?.tags?.reminders || []).map(tag => (<button key={tag} onClick={() => appendTag('reminders', tag)} className="px-3 py-2 bg-purple-100 text-purple-700 text-xs font-bold rounded-xl border border-purple-200 active-scale animate-pop hover:bg-purple-200">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-purple-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-purple-400" rows="2" value={form.reminders} onChange={e => setForm({...form, reminders: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-amber-600 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-4 h-4"></i>嘉賓接待 (VIP)</label><div className="flex flex-wrap gap-2 mb-2">{(venuesData[form.venue]?.tags?.vip || []).map(tag => (<button key={tag} onClick={() => appendTag('vip_pillar', tag)} className="px-3 py-2 bg-amber-50 text-amber-700 text-xs font-bold rounded-xl border border-amber-200 active-scale animate-pop hover:bg-amber-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-amber-400" rows="3" value={form.vip_pillar} onChange={e => setForm({...form, vip_pillar: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-blue-600 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-4 h-4"></i>觀眾管理 (Audience)</label><div className="flex flex-wrap gap-2 mb-2">{(venuesData[form.venue]?.tags?.audience || []).map(tag => (<button key={tag} onClick={() => appendTag('audience_pillar', tag)} className="px-3 py-2 bg-blue-50 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 active-scale animate-pop hover:bg-blue-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-blue-400" rows="3" value={form.audience_pillar} onChange={e => setForm({...form, audience_pillar: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-teal-600 uppercase tracking-widest flex items-center"><i data-lucide="box" className="mr-2 w-4 h-4"></i>RP 空間任務 (Logistics)</label><div className="flex flex-wrap gap-2 mb-2">{(venuesData[form.venue]?.tags?.rp || []).map(tag => (<button key={tag} onClick={() => appendTag('rp_tasks', tag)} className="px-3 py-2 bg-teal-50 text-teal-700 text-xs font-bold rounded-xl border border-teal-200 active-scale animate-pop hover:bg-teal-100">+ {tag}</button>))}</div><textarea placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-medium outline-none focus:border-teal-400" rows="4" value={form.rp_tasks} onChange={e => setForm({...form, rp_tasks: e.target.value})}></textarea></div>
+                                    <div className="space-y-3"><label className="text-xs font-black text-rose-600 uppercase tracking-widest flex items-center"><i data-lucide="ban" className="mr-2 w-4 h-4"></i>技術封位 (Tech Blocks)</label><div className="flex flex-wrap gap-2 mb-2">{(venuesData[form.venue]?.tags?.tech || []).map(tag => (<button key={tag} onClick={() => appendTag('tech_blocks', tag)} className="px-3 py-2 bg-rose-50 text-rose-700 text-xs font-bold rounded-xl border border-rose-200 active-scale animate-pop hover:bg-rose-100">+ {tag}</button>))}</div><input type="text" placeholder="..." className="w-full bg-white border border-slate-200 p-5 rounded-2xl text-slate-700 font-mono text-lg outline-none focus:border-rose-400" value={form.tech_blocks} onChange={e => setForm({...form, tech_blocks: e.target.value})} /></div>
+                                    <div className="space-y-3 bg-cyan-50/50 p-6 rounded-[32px] border border-cyan-200 shadow-sm"><label className="text-xs font-black text-cyan-600 uppercase tracking-widest flex items-center"><i data-lucide="clock" className="mr-2 w-4 h-4"></i>運營時間線 (Timeline)</label><div className="flex flex-wrap gap-2 mb-2">{(timelineTags || []).map(tag => (<button key={tag} onClick={() => appendTag('timeline', tag)} className="px-3 py-2 bg-cyan-100 text-cyan-700 text-xs font-bold rounded-xl border border-cyan-200 active-scale animate-pop hover:bg-cyan-200">+ {tag}</button>))}</div><textarea placeholder="[時間] - 任務..." className="w-full bg-white border border-cyan-200 p-5 rounded-2xl text-slate-700 font-mono text-sm outline-none focus:border-cyan-400" rows="5" value={form.timeline} onChange={e => setForm({...form, timeline: e.target.value})}></textarea></div>
 
-                                    {/* 多圖相冊 */}
+                                    {/* 相冊區塊 */}
                                     <div className="space-y-3 bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
                                         <div className="flex items-center justify-between mb-2">
                                             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center"><i data-lucide="images" className="mr-2 w-4 h-4 text-teal-500"></i>圖表相冊 ({form.reference_images.length}/10)</label>
@@ -586,9 +594,7 @@
                                     </div>
 
                                     <div className="pt-6 space-y-4">
-                                        <button onClick={generateAndSaveReport} className="w-full bg-teal-500 text-white font-black py-6 rounded-[32px] text-xl shadow-[0_8px_20px_rgba(20,184,166,0.3)] active-scale uppercase tracking-widest flex items-center justify-center">
-                                            <i data-lucide="save" className="mr-2 w-6 h-6"></i> 儲存運營報告
-                                        </button>
+                                        <button onClick={generateAndSaveReport} className="w-full bg-teal-500 text-white font-black py-6 rounded-[32px] text-xl shadow-[0_8px_20px_rgba(20,184,166,0.3)] active-scale uppercase tracking-widest flex items-center justify-center"><i data-lucide="save" className="mr-2 w-6 h-6"></i> 儲存運營報告</button>
                                         <button onClick={() => setActiveTab('dashboard')} className="w-full bg-white border border-slate-200 text-slate-500 font-bold py-4 rounded-[32px] text-sm uppercase active-scale">取消</button>
                                     </div>
                                 </div>
@@ -598,26 +604,15 @@
                         {/* ================= 報告面板 ================= */}
                         {activeTab === 'report' && reportData && (
                             <div className="space-y-8 animate-in slide-in-from-bottom-10 pb-20">
-                                
-                                <button onClick={copyReportText} className="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl flex items-center justify-center active-scale shadow-md mb-2">
-                                    <i data-lucide="clipboard-copy" className="w-5 h-5 mr-2"></i> 一鍵複製文字報告
-                                </button>
+                                <button onClick={copyReportText} className="w-full bg-slate-800 text-white font-bold py-4 rounded-2xl flex items-center justify-center active-scale shadow-md mb-2"><i data-lucide="clipboard-copy" className="w-5 h-5 mr-2"></i> 一鍵複製文字報告</button>
 
                                 <div className="border-b-2 border-slate-200 pb-4">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="flex items-center space-x-2">
-                                            <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-blue-100">{reportData.date}</span>
-                                            <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold">{reportData.venue}</span>
-                                        </div>
-                                    </div>
+                                    <div className="flex items-center justify-between mb-3"><div className="flex items-center space-x-2"><span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-widest border border-blue-100">{reportData.date}</span><span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-xs font-bold">{reportData.venue}</span></div></div>
                                     <h2 className="text-4xl font-black text-blue-700 italic uppercase tracking-tighter leading-tight mb-2">{reportData.event_name}</h2>
-                                    <p className="text-xs font-mono text-slate-500 bg-slate-100 p-2 rounded-lg border border-slate-200 inline-block mb-4">{venuesData[reportData.venue]?.capacity}</p>
+                                    <p className="text-xs font-mono text-slate-500 bg-slate-100 p-2 rounded-lg border border-slate-200 inline-block mb-4">{venuesData[reportData.venue]?.capacity || ""}</p>
                                 </div>
                                 
-                                {reportData.reminders && (
-                                    <section className="bg-purple-50 border border-purple-200 p-6 rounded-[32px] shadow-sm relative overflow-hidden"><div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-bl-full"></div><h3 className="text-sm font-black text-purple-600 uppercase tracking-widest flex items-center mb-2 relative z-10"><i data-lucide="bell-ring" className="mr-2 w-5 h-5 mb-0.5 text-purple-500"></i>特別安排 & 人手 (Staffing)</h3><p className="text-lg font-bold leading-relaxed whitespace-pre-line text-purple-900 relative z-10">{reportData.reminders}</p></section>
-                                )}
-
+                                {reportData.reminders && (<section className="bg-purple-50 border border-purple-200 p-6 rounded-[32px] shadow-sm relative overflow-hidden"><div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-bl-full"></div><h3 className="text-sm font-black text-purple-600 uppercase tracking-widest flex items-center mb-2 relative z-10"><i data-lucide="bell-ring" className="mr-2 w-5 h-5 mb-0.5 text-purple-500"></i>特別安排 & 人手 (Staffing)</h3><p className="text-lg font-bold leading-relaxed whitespace-pre-line text-purple-900 relative z-10">{reportData.reminders}</p></section>)}
                                 <section className="bg-amber-50 border border-amber-100 p-6 rounded-[32px] shadow-sm"><h3 className="text-sm font-black text-amber-600 uppercase tracking-widest flex items-center"><i data-lucide="star" className="mr-2 w-5 h-5 mb-0.5 text-amber-500"></i>VIP 接待</h3><p className="text-lg font-bold leading-relaxed whitespace-pre-line text-slate-800">{reportData.vip_pillar}</p></section>
                                 <section className="bg-blue-50 border border-blue-100 p-6 rounded-[32px] shadow-sm"><h3 className="text-sm font-black text-blue-600 uppercase tracking-widest flex items-center"><i data-lucide="users" className="mr-2 w-5 h-5 mb-0.5 text-blue-500"></i>觀眾管理</h3><p className="text-lg font-bold leading-relaxed whitespace-pre-line text-slate-800">{reportData.audience_pillar}</p></section>
                                 <section className="space-y-4"><h3 className="text-teal-600 font-black text-sm uppercase tracking-widest px-2 flex items-center"><i data-lucide="box" className="mr-2 w-5 h-5 mb-0.5 text-teal-500"></i>RP 空間任務</h3>{reportData.rp_pillar.map((item, i) => (<div key={i} className="bg-white border-l-4 border-teal-500 p-6 rounded-[24px] shadow-sm space-y-2"><p className="text-2xl font-black tracking-tight text-teal-600">{item.task}</p><p className="text-base text-slate-600 font-medium italic leading-relaxed whitespace-pre-line">{item.detail}</p></div>))}</section>
@@ -664,12 +659,6 @@
                         </button>
                     </nav>
 
-                    {isProcessing && (
-                        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] flex flex-col items-center justify-center p-12 text-center animate-in fade-in duration-200">
-                            <div className="animate-spin-custom mb-6 text-blue-500"><i data-lucide="loader-2" className="w-16 h-16"></i></div>
-                            <p className="text-slate-600 font-bold tracking-widest uppercase">處理相片中...</p>
-                        </div>
-                    )}
                 </div>
             );
         };
